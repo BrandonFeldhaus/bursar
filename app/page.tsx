@@ -98,11 +98,16 @@ function Timeline({
 
 type TabKey = "income" | "bills" | "leftover";
 
+import type { BudgetCategory } from "./lib/budgetStorage";
+import { computeAllocations } from "./lib/allocations";
+
 function PeriodCard({
   period,
+  budgetCategories,
   onTogglePaid,
 }: {
   period: PaycheckPeriod;
+  budgetCategories: BudgetCategory[];
   onTogglePaid: (expenseId: string, periodId: string) => void;
 }) {
   const [tab, setTab] = useState<TabKey>("bills");
@@ -112,14 +117,13 @@ function PeriodCard({
     ? "Only paycheck"
     : `${period.index}${ordinal} paycheck of ${period.total}`;
 
-  // All items sorted by date for "leftover" tab
-  const allItems = useMemo(() => {
-    const items = [
-      ...period.incomes.map((i) => ({ ...i, type: "income" as const })),
-      ...period.bills.map((b) => ({ ...b, type: "bill" as const })),
-    ];
-    return items.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [period]);
+  const allocations = useMemo(
+    () => computeAllocations(period.leftover, budgetCategories),
+    [period.leftover, budgetCategories],
+  );
+
+  const allocatedTotal = useMemo(() => allocations.reduce((s, a) => s + a.amount, 0), [allocations]);
+  const unallocated = period.leftover - allocatedTotal;
 
   return (
     <div className="sheet sheet--ledger period-card">
@@ -205,40 +209,28 @@ function PeriodCard({
         )}
 
         {tab === "leftover" && (
-          allItems.length === 0 ? (
-            <p className="muted" style={{ fontStyle: "italic" }}>No entries in this period.</p>
+          allocations.length === 0 ? (
+            <p className="muted" style={{ fontStyle: "italic" }}>No budget categories set. Add them in the Budget page.</p>
           ) : (
-            allItems.map((item) => {
-              const isIncome = item.type === "income";
-              const isBillPaid = !isIncome && (item as typeof period.bills[0]).paid;
-              return (
-                <div key={item.id} className={`recent-item${isBillPaid ? " recent-item--paid" : ""}`}>
+            <>
+              {allocations.map((a) => (
+                <div key={a.id} className="recent-item">
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {!isIncome && (
-                      <input
-                        type="checkbox"
-                        checked={isBillPaid}
-                        onChange={() => {
-                          const b = item as typeof period.bills[0];
-                          onTogglePaid(b.expenseId, b.periodId);
-                        }}
-                        style={{ accentColor: "var(--ink-1)", cursor: "pointer" }}
-                      />
-                    )}
-                    {isIncome && (
-                      <span style={{ width: 13, display: "inline-block", textAlign: "center", color: "var(--ink-3)", fontSize: 11 }}>↑</span>
-                    )}
-                    <span className={`recent-item__name${isIncome ? " kicker--ink" : ""}`} style={isIncome ? { fontFamily: "var(--font-stamp)", fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase" } : {}}>
-                      {item.name}
+                    <span className="recent-item__name">{a.name}</span>
+                    <span className="badge" style={{ fontSize: 9 }}>
+                      {a.mode === "percent" ? `${a.value}%` : "fixed"}
                     </span>
                   </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span className="recent-item__date">{formatShortDate(item.date)}</span>
-                    <Money value={isIncome ? item.amount : -(item as typeof period.bills[0]).amount} struck={isBillPaid} />
-                  </span>
+                  <Money value={a.amount} />
                 </div>
-              );
-            })
+              ))}
+              {Math.abs(unallocated) > 0.005 && (
+                <div className="recent-item" style={{ opacity: 0.55 }}>
+                  <span className="recent-item__name" style={{ fontStyle: "italic" }}>Unallocated</span>
+                  <Money value={unallocated} />
+                </div>
+              )}
+            </>
           )
         )}
       </div>
@@ -432,7 +424,7 @@ export default function Home() {
       {/* Paycheck period cards — one per paycheck date */}
       <div className="period-grid">
         {periods.map((p) => (
-          <PeriodCard key={p.key} period={p} onTogglePaid={togglePaid} />
+          <PeriodCard key={p.key} period={p} budgetCategories={state.budgetCategories} onTogglePaid={togglePaid} />
         ))}
       </div>
     </section>

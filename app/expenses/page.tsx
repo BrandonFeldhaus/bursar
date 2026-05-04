@@ -331,7 +331,7 @@ export default function ExpensesPage() {
         </div>
 
         {/* Inline add form */}
-        <div className="inline-form" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr auto" }}>
+        <div className={`inline-form${draft.cadence === "annual" ? " inline-form--5col" : " inline-form--4col"}`}>
           <div className="field">
             <label className="field__label">New notation</label>
             <input
@@ -376,6 +376,22 @@ export default function ExpensesPage() {
               onChange={(e) => setDraft((d) => ({ ...d, dueDay: Math.max(1, Math.min(31, Number(e.target.value))) }))}
             />
           </div>
+          {draft.cadence === "annual" && (
+            <div className="field">
+              <label className="field__label">Month</label>
+              <select
+                className="select"
+                value={draft.dueMonth}
+                onChange={(e) => setDraft((d) => ({ ...d, dueMonth: Number(e.target.value) }))}
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {new Date(2026, i, 1).toLocaleDateString("en-US", { month: "short" })}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button className="btn" type="button" onClick={add} disabled={!draft.name.trim()}>
             Add
           </button>

@@ -205,7 +205,7 @@ export default function IncomePage() {
         </div>
 
         {/* Inline add form */}
-        <div className="inline-form">
+        <div className={`inline-form${draft.payCycle === "biweekly" ? " inline-form--4col" : ""}`}>
           <div className="field">
             <label className="field__label">New source</label>
             <input
@@ -239,13 +239,21 @@ export default function IncomePage() {
               <option value="semimonthly">Semi-monthly</option>
             </select>
           </div>
+          {draft.payCycle === "biweekly" && (
+            <div className="field">
+              <label className="field__label">Last paycheck</label>
+              <input
+                className="input"
+                type="date"
+                value={draft.lastPaycheckDate}
+                onChange={(e) => setDraft((d) => ({ ...d, lastPaycheckDate: e.target.value }))}
+              />
+            </div>
+          )}
           <button className="btn" type="button" onClick={add} disabled={!draft.name.trim()}>
             Add source
           </button>
         </div>
-        <p className="field__hint" style={{ padding: "8px 24px 16px 64px" }}>
-          Used to forecast your bi-weekly paycheck dates.
-        </p>
       </div>
     </section>
   );

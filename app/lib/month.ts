@@ -90,13 +90,6 @@ export function incomeDatesForMonth(income: Income, monthKey: string): Date[] {
 
 export function recurringDueDate(expense: RecurringExpense, monthKey: string): Date | null {
   const { year, monthIndex, lastDay } = monthBounds(monthKey);
-
-  if (expense.cadence === "annual") {
-    if (expense.dueMonth !== monthIndex + 1) return null;
-    const dd = Math.max(1, Math.min(expense.dueDay ?? 1, lastDay));
-    return new Date(year, monthIndex, dd);
-  }
-
   const dd = Math.max(1, Math.min(expense.dueDay ?? 1, lastDay));
   return new Date(year, monthIndex, dd);
 }

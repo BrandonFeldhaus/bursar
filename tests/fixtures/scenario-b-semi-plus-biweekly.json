@@ -1,0 +1,133 @@
+{
+  "app": "Paper & Ink Ledger",
+  "format": "paperInkLedger:v1",
+  "exportedAt": "2026-05-04T12:00:00.000Z",
+  "data": {
+    "meta": {
+      "onboardingComplete": true,
+      "version": 1,
+      "createdAt": "2026-05-04T12:00:00.000Z"
+    },
+    "settings": {
+      "payCycleType": "semimonthly",
+      "paycheckAmount": 2000
+    },
+    "payCycle": "semimonthly",
+    "paycheckAmount": 2000,
+    "lastPaycheckDate": "",
+    "incomeMonthly": 7033,
+    "incomes": [
+      {
+        "id": "income-b1",
+        "name": "Day Job",
+        "amount": 2000,
+        "cadence": "monthly",
+        "payCycle": "semimonthly",
+        "lastPaycheckDate": ""
+      },
+      {
+        "id": "income-b2",
+        "name": "Side Gig",
+        "amount": 1400,
+        "cadence": "monthly",
+        "payCycle": "biweekly",
+        "lastPaycheckDate": "2026-05-02"
+      }
+    ],
+    "recurringExpenses": [
+      {
+        "id": "exp-rent",
+        "name": "Rent",
+        "amount": 1400,
+        "cadence": "monthly",
+        "dueDay": 1,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-gym",
+        "name": "Gym",
+        "amount": 45,
+        "cadence": "monthly",
+        "dueDay": 5,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-utils",
+        "name": "Utilities",
+        "amount": 150,
+        "cadence": "monthly",
+        "dueDay": 8,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-internet",
+        "name": "Internet",
+        "amount": 80,
+        "cadence": "monthly",
+        "dueDay": 15,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-phone",
+        "name": "Phone",
+        "amount": 65,
+        "cadence": "monthly",
+        "dueDay": 20,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-car-ins",
+        "name": "Car Insurance",
+        "amount": 1800,
+        "cadence": "annual",
+        "dueDay": 10,
+        "dueMonth": 5,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-renters",
+        "name": "Renter's Insurance",
+        "amount": 240,
+        "cadence": "annual",
+        "dueDay": 15,
+        "dueMonth": 8,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-prime",
+        "name": "Amazon Prime",
+        "amount": 139,
+        "cadence": "annual",
+        "dueDay": 15,
+        "dueMonth": 3,
+        "paidPeriods": []
+      }
+    ],
+    "budgetCategories": [
+      {
+        "id": "cat-ef",
+        "name": "Emergency Fund",
+        "mode": "fixed",
+        "value": 200
+      },
+      {
+        "id": "cat-savings",
+        "name": "Savings",
+        "mode": "percent",
+        "value": 20
+      },
+      {
+        "id": "cat-spending",
+        "name": "Spending",
+        "mode": "percent",
+        "value": 50
+      },
+      {
+        "id": "cat-buffer",
+        "name": "Buffer",
+        "mode": "percent",
+        "value": 30
+      }
+    ]
+  }
+}

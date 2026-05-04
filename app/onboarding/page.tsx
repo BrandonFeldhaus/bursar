@@ -7,7 +7,7 @@ import { useHydrated } from "../lib/useHydrated";
 import { todayISO } from "../lib/month";
 
 type IncomeDraft = { name: string; amount: number; payCycle: PayCycle; lastPaycheckDate: string };
-type BillDraft = { id: string; name: string; amount: number; cadence: "monthly" | "annual"; dueDay: number };
+type BillDraft = { id: string; name: string; amount: number; cadence: "monthly" | "annual"; dueDay: number; dueMonth: number };
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -20,8 +20,8 @@ export default function OnboardingPage() {
     lastPaycheckDate: todayISO(),
   });
   const [bills, setBills] = useState<BillDraft[]>([
-    { id: newId(), name: "Rent", amount: 1200, cadence: "monthly", dueDay: 1 },
-    { id: newId(), name: "Utilities", amount: 120, cadence: "monthly", dueDay: 8 },
+    { id: newId(), name: "Rent", amount: 1200, cadence: "monthly", dueDay: 1, dueMonth: 1 },
+    { id: newId(), name: "Utilities", amount: 120, cadence: "monthly", dueDay: 8, dueMonth: 1 },
   ]);
   const [allocations, setAllocations] = useState<BudgetCategory[]>([
     { id: newId(), name: "Savings", mode: "percent", value: 25 },
@@ -159,7 +159,7 @@ export default function OnboardingPage() {
             </p>
             <div style={{ display: "grid", gap: 8 }}>
               {bills.map((b) => (
-                <div key={b.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
+                <div key={b.id} style={{ display: "grid", gridTemplateColumns: b.cadence === "annual" ? "2fr 1fr 1fr 1fr 1fr auto" : "2fr 1fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
                   <input
                     className="input"
                     placeholder="Bill name"
@@ -184,6 +184,29 @@ export default function OnboardingPage() {
                     <option value="monthly">Monthly</option>
                     <option value="annual">Annual</option>
                   </select>
+                  <input
+                    className="input input--mono"
+                    type="number"
+                    min={1}
+                    max={31}
+                    title="Due day"
+                    value={b.dueDay}
+                    onChange={(e) => setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, dueDay: Math.max(1, Math.min(31, Number(e.target.value))) } : x))}
+                  />
+                  {b.cadence === "annual" && (
+                    <select
+                      className="select"
+                      title="Due month"
+                      value={b.dueMonth}
+                      onChange={(e) => setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, dueMonth: Number(e.target.value) } : x))}
+                    >
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          {new Date(2026, i, 1).toLocaleDateString("en-US", { month: "short" })}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <button
                     className="btn btn--icon"
                     type="button"
@@ -196,7 +219,7 @@ export default function OnboardingPage() {
               <button
                 className="btn btn--ghost"
                 type="button"
-                onClick={() => setBills((xs) => [...xs, { id: newId(), name: "", amount: 0, cadence: "monthly", dueDay: 1 }])}
+                onClick={() => setBills((xs) => [...xs, { id: newId(), name: "", amount: 0, cadence: "monthly", dueDay: 1, dueMonth: 1 }])}
               >
                 + Add bill
               </button>

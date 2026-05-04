@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { loadState, newId, saveState, type BudgetCategory, type BudgetState } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
+import { isBudgetOverdrawn } from "../lib/allocations";
 import { monthlyIncomeOf } from "../lib/month";
 
 function moneyFmt(value: number) {
@@ -110,20 +111,24 @@ export default function BudgetPage() {
   }
 
   const derived = useMemo(() => {
-    if (!state) return { monthlyIncome: 0, percentTotal: 0, fixedTotal: 0, fixedPct: 0, usedPct: 0, segments: [] };
+    if (!state) return { monthlyIncome: 0, percentTotal: 0, fixedTotal: 0, overdrawn: false, segments: [] };
     const cats = state.budgetCategories;
     const monthlyIncome = monthlyIncomeOf(state);
     const percentTotal = cats.filter((c) => c.mode === "percent").reduce((s, c) => s + c.value, 0);
     const fixedTotal = cats.filter((c) => c.mode === "fixed").reduce((s, c) => s + c.value, 0);
-    const fixedPct = monthlyIncome > 0 ? (fixedTotal / monthlyIncome) * 100 : 0;
-    const usedPct = percentTotal + fixedPct;
+    const overdrawn = isBudgetOverdrawn(percentTotal, fixedTotal, monthlyIncome);
+    // Ring: fixed items claim their fraction of income; percent items split the remaining fraction.
+    const fixedFrac = monthlyIncome > 0 ? Math.min(fixedTotal / monthlyIncome, 1) : 0;
+    const remainderFrac = 1 - fixedFrac;
     const segments = cats.map((c, i) => ({
       name: c.name,
       color: COLORS[i % COLORS.length],
-      value: c.mode === "percent" ? c.value : monthlyIncome > 0 ? (c.value / monthlyIncome) * 100 : 0,
+      value: c.mode === "fixed"
+        ? fixedFrac * 100 * (monthlyIncome > 0 ? c.value / fixedTotal || 0 : 0)
+        : (c.value / 100) * remainderFrac * 100,
       raw: c,
     }));
-    return { monthlyIncome, percentTotal, fixedTotal, fixedPct, usedPct, segments };
+    return { monthlyIncome, percentTotal, fixedTotal, overdrawn, segments };
   }, [state]);
 
   if (!hydrated || !state) {
@@ -138,7 +143,7 @@ export default function BudgetPage() {
     );
   }
 
-  const { monthlyIncome, percentTotal, fixedTotal, usedPct, segments } = derived;
+  const { monthlyIncome, percentTotal, fixedTotal, overdrawn, segments } = derived;
   const cats = state.budgetCategories;
 
   return (
@@ -154,8 +159,8 @@ export default function BudgetPage() {
             <span className="page-head__meta-value">{moneyFmt(monthlyIncome)}</span>
           </div>
           <div className="page-head__meta-item">
-            <span className="page-head__meta-label">Allocated</span>
-            <span className="page-head__meta-value">{usedPct.toFixed(0)}%</span>
+            <span className="page-head__meta-label">% of remainder</span>
+            <span className="page-head__meta-value">{percentTotal.toFixed(0)}%</span>
           </div>
           <div className="page-head__meta-item">
             <span className="page-head__meta-label">Categories</span>
@@ -176,8 +181,8 @@ export default function BudgetPage() {
         </article>
         <article className="sheet stat stat--accent" style={{ padding: "16px 22px 18px" }}>
           <div className="stat__label">Status</div>
-          <div className={`stat__value${usedPct > 100 ? " stat__value--neg" : ""}`}>
-            {usedPct <= 100 ? "In balance" : "Overdrawn"}
+          <div className={`stat__value${overdrawn ? " stat__value--neg" : ""}`}>
+            {overdrawn ? "Overdrawn" : "In balance"}
           </div>
         </article>
       </div>
@@ -187,9 +192,9 @@ export default function BudgetPage() {
         <div className="ring-wrap">
           <AllocationRing
             segments={segments}
-            total={Math.max(100, usedPct)}
-            label={`${usedPct.toFixed(0)}%`}
-            sublabel="of monthly income"
+            total={100}
+            label={`${percentTotal.toFixed(0)}%`}
+            sublabel="of remainder"
           />
           <div>
             <p className="kicker">Distribution</p>
@@ -224,7 +229,7 @@ export default function BudgetPage() {
             <p className="kicker">Categories</p>
             <h2 className="section-title">Budget entries</h2>
           </div>
-          <span className={`badge${usedPct > 100 ? " badge--red" : ""}`}>{usedPct.toFixed(0)}% allocated</span>
+          <span className={`badge${overdrawn ? " badge--red" : ""}`}>{percentTotal.toFixed(0)}% of remainder</span>
         </div>
 
         <div className="ledger-table-wrap" style={{ borderRadius: "10px 10px 0 0" }}>
