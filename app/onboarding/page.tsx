@@ -105,7 +105,7 @@ export default function OnboardingPage() {
                 />
               </div>
               <div className="field">
-                <label className="field__label">Amount per paycheck</label>
+                <label className="field__label">Amount per paycheck (after taxes)</label>
                 <input
                   className="input input--mono"
                   type="text"

@@ -1,27 +1,32 @@
-# Deploy Next.js to GitHub Pages
+# Paper & Ink Ledger
 
-This is a Next.js template which can be deployed to GitHub Pages as a static site.
+Paper & Ink Ledger is a local-first paycheck budgeting app. It focuses on the practical question many monthly budget tools blur: **what does this paycheck need to cover before the next one arrives?**
 
-## Deploying to GitHub Pages
+The app stores data in browser `localStorage` under `budgetApp:v1`. It does not require an account, a bank login, or a server-side database.
 
-1.  Create a new public GitHub repository
-2.  Push the starter code to the `main` branch
-3.  On GitHub, go to **Settings** > **Pages** > **Source**, and choose **GitHub Actions** as the source
-4.  Make a commit and push it to see the changes on GitHub Pages
+## What It Does
 
-Congratulations! You should have a URL like:
+- Forecasts biweekly and semi-monthly paycheck periods.
+- Assigns recurring monthly and annual bills into the paycheck period where they are due.
+- Tracks paid/unpaid bill status by paycheck period.
+- Shows income, bills, leftover cash, and budget allocations per period.
+- Supports percentage and fixed-dollar allocation categories for leftover money.
+- Exports and imports local data from the Settings page.
+
+
+## Development
 
 ```bash
-https://<github-user-name>.github.io/<github-project-name>/
+npm install
+npm run dev
 ```
 
-For more information, see our [deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying/static-exports).
+Validate before deploying:
 
-## Learn More
+```bash
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Deploying To GitHub Pages
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This project uses Next.js static export and can be deployed to GitHub Pages through GitHub Actions. On GitHub, set **Settings > Pages > Source** to **GitHub Actions**, then push to `main`.

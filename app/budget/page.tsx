@@ -199,10 +199,10 @@ export default function BudgetPage() {
           <div>
             <p className="kicker">Distribution</p>
             <h2 className="section-title mb-3">Where each dollar goes</h2>
-            <div>
+            <div className="allocation-list">
               {segments.map((s, i) => (
                 <div key={i} className="allocation-row">
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, width: 200 }}>
+                  <div className="allocation-label">
                     <span style={{ width: 12, height: 12, borderRadius: 2, background: s.color, flexShrink: 0, display: "inline-block" }} />
                     <span className="allocation-name">{s.name}</span>
                   </div>

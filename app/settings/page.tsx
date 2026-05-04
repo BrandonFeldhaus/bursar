@@ -121,16 +121,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* About section */}
-      <div className="sheet" style={{ padding: "20px 28px" }}>
-        <p className="kicker">About</p>
-        <h2 className="section-title mb-3">Paper &amp; Ink Ledger</h2>
-        <p style={{ fontFamily: "var(--font-hand)", fontSize: 17, lineHeight: "28px", color: "var(--ink-2)", maxWidth: "62ch", margin: 0 }}>
-          A budget ledger that feels like writing in a notebook. Income is anchored to paycheck dates;
-          bills are spread across the month; annual costs are set aside automatically.
-          Everything stays on this device — no accounts, no sync, no servers.
-        </p>
-      </div>
     </section>
   );
 }
