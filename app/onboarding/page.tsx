@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { defaultBudget, loadBudget, newId, saveBudget, type BudgetCategory, type PayCycle, type RecurringExpense } from "../lib/budgetStorage";
+import { defaultBudget, loadBudget, newId, saveBudget, type BudgetCategory, type BudgetState, type PayCycle, type RecurringExpense } from "../lib/budgetStorage";
 import { useHydrated } from "../lib/useHydrated";
 import { todayISO } from "../lib/month";
 
@@ -23,6 +23,8 @@ export default function OnboardingPage() {
     { id: newId(), name: "Rent", amount: 1200, cadence: "monthly", dueDay: 1, dueMonth: 1 },
     { id: newId(), name: "Utilities", amount: 120, cadence: "monthly", dueDay: 8, dueMonth: 1 },
   ]);
+  const [billDraft, setBillDraft] = useState<Omit<BillDraft, "id">>({ name: "", amount: 0, cadence: "monthly", dueDay: 1, dueMonth: 1 });
+  const [allocDraft, setAllocDraft] = useState<Omit<BudgetCategory, "id">>({ name: "", mode: "percent", value: 0 });
   const [allocations, setAllocations] = useState<BudgetCategory[]>([
     { id: newId(), name: "Savings", mode: "percent", value: 25 },
     { id: newId(), name: "Spending", mode: "percent", value: 50 },
@@ -36,6 +38,27 @@ export default function OnboardingPage() {
       router.replace("/");
     }
   }, [hydrated, router]);
+
+  async function importFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const parsed: unknown = JSON.parse(await file.text());
+      const incoming =
+        typeof parsed === "object" && parsed !== null && "data" in parsed
+          ? (parsed as { data?: unknown }).data
+          : typeof parsed === "object" && parsed !== null && "budgetAppV1" in parsed
+          ? (parsed as { budgetAppV1?: unknown }).budgetAppV1
+          : parsed;
+      if (!incoming || typeof incoming !== "object") return;
+      saveBudget(incoming as BudgetState);
+      router.replace("/");
+    } catch {
+      // invalid file — stay on onboarding
+    } finally {
+      e.target.value = "";
+    }
+  }
 
   function finish() {
     saveBudget(
@@ -90,9 +113,9 @@ export default function OnboardingPage() {
         {/* Step 1: Income */}
         {step === 0 && (
           <div>
-            <p className="kicker">Step 1 of 3</p>
+            <p className="kicker">Income</p>
             <h1 className="page-head__title" style={{ marginBottom: 10 }}>Open the book</h1>
-            <p className="muted" style={{ fontSize: 17, marginBottom: 24, color: "var(--ink-2)" }}>
+            <p className="page-head__lead" style={{ marginBottom: 24 }}>
               Start with your primary paycheck. You can add more sources after.
             </p>
             <div style={{ display: "grid", gap: 18 }}>
@@ -146,59 +169,166 @@ export default function OnboardingPage() {
                 </div>
               )}
             </div>
+
+            <div className="onboarding-divider">
+              <span>or</span>
+            </div>
+
+            <div className="field">
+              <label className="field__label">Import a saved ledger file</label>
+              <p className="field__hint">Pick a .json file exported from Paper &amp; Ink to skip setup entirely.</p>
+              <label className="btn btn--ghost onboarding-file-btn">
+                Choose file
+                <input type="file" accept=".json,application/json" style={{ display: "none" }} onChange={importFile} />
+              </label>
+            </div>
           </div>
         )}
 
         {/* Step 2: Bills */}
         {step === 1 && (
           <div>
-            <p className="kicker">Step 2 of 3</p>
+            <p className="kicker">Bills</p>
             <h1 className="page-head__title" style={{ marginBottom: 10 }}>List your bills</h1>
-            <p className="muted" style={{ fontSize: 17, marginBottom: 24, color: "var(--ink-2)" }}>
+            <p className="page-head__lead" style={{ marginBottom: 24 }}>
               Recurring obligations. Annual ones get spread across the year automatically.
             </p>
-            <div style={{ display: "grid", gap: 8 }}>
-              {bills.map((b) => (
-                <div key={b.id} style={{ display: "grid", gridTemplateColumns: b.cadence === "annual" ? "2fr 1fr 1fr 1fr 1fr auto" : "2fr 1fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
-                  <input
-                    className="input"
-                    placeholder="Bill name"
-                    value={b.name}
-                    onChange={(e) => setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, name: e.target.value } : x))}
-                  />
-                  <input
-                    className="input input--mono"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={b.amount || ""}
-                    onChange={(e) =>
-                      setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, amount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) } : x))
-                    }
-                  />
-                  <select
-                    className="select"
-                    value={b.cadence}
-                    onChange={(e) => setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, cadence: e.target.value as "monthly" | "annual" } : x))}
-                  >
-                    <option value="monthly">Monthly</option>
-                    <option value="annual">Annual</option>
-                  </select>
+            <div className="ledger-table-wrap-no-line" style={{ borderRadius: "10px 10px 0 0" }}>
+              <table className="ledger-table onboarding-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: "32%" }}>Notation</th>
+                    <th className="text-right" style={{ width: "16%" }}>Amount</th>
+                    <th style={{ width: "22%" }}>Cadence</th>
+                    <th style={{ width: "26%" }}>Due</th>
+                    <th className="text-tight" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {bills.map((b) => (
+                    <tr key={b.id}>
+                      <td>
+                        <input
+                          className="input"
+                          placeholder="Bill name"
+                          value={b.name}
+                          onChange={(e) => setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, name: e.target.value } : x))}
+                        />
+                      </td>
+                      <td className="text-right mono">
+                        <input
+                          className="input input--mono"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0"
+                          value={b.amount || ""}
+                          style={{ textAlign: "right" }}
+                          onChange={(e) =>
+                            setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, amount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) } : x))
+                          }
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className="select"
+                          value={b.cadence}
+                          onChange={(e) => setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, cadence: e.target.value as "monthly" | "annual" } : x))}
+                        >
+                          <option value="monthly">Monthly</option>
+                          <option value="annual">Annual</option>
+                        </select>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <input
+                            className="input input--mono"
+                            type="number"
+                            min={1}
+                            max={31}
+                            value={b.dueDay}
+                            style={{ width: "52px", flexShrink: 0 }}
+                            onChange={(e) => setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, dueDay: Math.max(1, Math.min(31, Number(e.target.value))) } : x))}
+                          />
+                          {b.cadence === "annual" && (
+                            <select
+                              className="select"
+                              value={b.dueMonth}
+                              onChange={(e) => setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, dueMonth: Number(e.target.value) } : x))}
+                            >
+                              {Array.from({ length: 12 }, (_, i) => (
+                                <option key={i + 1} value={i + 1}>
+                                  {new Date(2026, i, 1).toLocaleDateString("en-US", { month: "short" })}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-tight">
+                        <button
+                          className="btn btn--icon"
+                          type="button"
+                          aria-label={`Delete ${b.name}`}
+                          onClick={() => setBills((xs) => xs.filter((x) => x.id !== b.id))}
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="inline-form inline-form--4col">
+              <div className="field">
+                <label className="field__label">New notation</label>
+                <input
+                  className="input"
+                  placeholder="e.g. Internet"
+                  value={billDraft.name}
+                  onChange={(e) => setBillDraft((d) => ({ ...d, name: e.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label className="field__label">Amount</label>
+                <input
+                  className="input input--mono"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={billDraft.amount || ""}
+                  onChange={(e) => setBillDraft((d) => ({ ...d, amount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) }))}
+                />
+              </div>
+              <div className="field">
+                <label className="field__label">Cadence</label>
+                <select
+                  className="select"
+                  value={billDraft.cadence}
+                  onChange={(e) => setBillDraft((d) => ({ ...d, cadence: e.target.value as "monthly" | "annual" }))}
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="annual">Annual</option>
+                </select>
+              </div>
+              <div className="field">
+                <label className="field__label">Due{billDraft.cadence === "annual" ? " day / month" : " day"}</label>
+                <div style={{ display: "flex", gap: 6 }}>
                   <input
                     className="input input--mono"
                     type="number"
                     min={1}
                     max={31}
-                    title="Due day"
-                    value={b.dueDay}
-                    onChange={(e) => setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, dueDay: Math.max(1, Math.min(31, Number(e.target.value))) } : x))}
+                    placeholder="1"
+                    value={billDraft.dueDay || ""}
+                    style={{ width: "52px", flexShrink: 0 }}
+                    onChange={(e) => setBillDraft((d) => ({ ...d, dueDay: Math.max(1, Math.min(31, Number(e.target.value))) }))}
                   />
-                  {b.cadence === "annual" && (
+                  {billDraft.cadence === "annual" && (
                     <select
                       className="select"
-                      title="Due month"
-                      value={b.dueMonth}
-                      onChange={(e) => setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, dueMonth: Number(e.target.value) } : x))}
+                      value={billDraft.dueMonth}
+                      onChange={(e) => setBillDraft((d) => ({ ...d, dueMonth: Number(e.target.value) }))}
                     >
                       {Array.from({ length: 12 }, (_, i) => (
                         <option key={i + 1} value={i + 1}>
@@ -207,21 +337,19 @@ export default function OnboardingPage() {
                       ))}
                     </select>
                   )}
-                  <button
-                    className="btn btn--icon"
-                    type="button"
-                    onClick={() => setBills((xs) => xs.filter((x) => x.id !== b.id))}
-                  >
-                    ×
-                  </button>
                 </div>
-              ))}
+              </div>
               <button
-                className="btn btn--ghost"
+                className="btn"
                 type="button"
-                onClick={() => setBills((xs) => [...xs, { id: newId(), name: "", amount: 0, cadence: "monthly", dueDay: 1, dueMonth: 1 }])}
+                disabled={!billDraft.name.trim()}
+                onClick={() => {
+                  if (!billDraft.name.trim()) return;
+                  setBills((xs) => [...xs, { id: newId(), ...billDraft, name: billDraft.name.trim() }]);
+                  setBillDraft({ name: "", amount: 0, cadence: "monthly", dueDay: 1, dueMonth: 1 });
+                }}
               >
-                + Add bill
+                Add
               </button>
             </div>
           </div>
@@ -230,53 +358,113 @@ export default function OnboardingPage() {
         {/* Step 3: Plan */}
         {step === 2 && (
           <div>
-            <p className="kicker">Step 3 of 3</p>
+            <p className="kicker">Plan</p>
             <h1 className="page-head__title" style={{ marginBottom: 10 }}>Plan the leftover</h1>
-            <p className="muted" style={{ fontSize: 17, marginBottom: 24, color: "var(--ink-2)" }}>
+            <p className="page-head__lead" style={{ marginBottom: 24 }}>
               How should every paycheck be split after bills?
             </p>
-            <div style={{ display: "grid", gap: 8 }}>
-              {allocations.map((a) => (
-                <div key={a.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
-                  <input
-                    className="input"
-                    placeholder="Category"
-                    value={a.name}
-                    onChange={(e) => setAllocations((xs) => xs.map((x) => x.id === a.id ? { ...x, name: e.target.value } : x))}
-                  />
-                  <select
-                    className="select"
-                    value={a.mode}
-                    onChange={(e) => setAllocations((xs) => xs.map((x) => x.id === a.id ? { ...x, mode: e.target.value as "percent" | "fixed" } : x))}
-                  >
-                    <option value="percent">Percent</option>
-                    <option value="fixed">Fixed $</option>
-                  </select>
-                  <input
-                    className="input input--mono"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={a.value || ""}
-                    onChange={(e) =>
-                      setAllocations((xs) => xs.map((x) => x.id === a.id ? { ...x, value: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) } : x))
-                    }
-                  />
-                  <button
-                    className="btn btn--icon"
-                    type="button"
-                    onClick={() => setAllocations((xs) => xs.filter((x) => x.id !== a.id))}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+            <div className="ledger-table-wrap-no-line" style={{ borderRadius: "10px 10px 0 0" }}>
+              <table className="ledger-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: "45%" }}>Category</th>
+                    <th style={{ width: "25%" }}>Type</th>
+                    <th className="text-right" style={{ width: "25%" }}>Value</th>
+                    <th className="text-tight" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {allocations.map((a) => (
+                    <tr key={a.id}>
+                      <td>
+                        <input
+                          className="input"
+                          placeholder="Category"
+                          value={a.name}
+                          onChange={(e) => setAllocations((xs) => xs.map((x) => x.id === a.id ? { ...x, name: e.target.value } : x))}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className="select"
+                          value={a.mode}
+                          onChange={(e) => setAllocations((xs) => xs.map((x) => x.id === a.id ? { ...x, mode: e.target.value as "percent" | "fixed" } : x))}
+                        >
+                          <option value="percent">Percent</option>
+                          <option value="fixed">Fixed $</option>
+                        </select>
+                      </td>
+                      <td className="text-right mono">
+                        <input
+                          className="input input--mono"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0"
+                          value={a.value || ""}
+                          style={{ textAlign: "right" }}
+                          onChange={(e) =>
+                            setAllocations((xs) => xs.map((x) => x.id === a.id ? { ...x, value: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) } : x))
+                          }
+                        />
+                      </td>
+                      <td className="text-tight">
+                        <button
+                          className="btn btn--icon"
+                          type="button"
+                          aria-label={`Delete ${a.name}`}
+                          onClick={() => setAllocations((xs) => xs.filter((x) => x.id !== a.id))}
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="inline-form">
+              <div className="field">
+                <label className="field__label">New category</label>
+                <input
+                  className="input"
+                  placeholder="e.g. Travel fund"
+                  value={allocDraft.name}
+                  onChange={(e) => setAllocDraft((d) => ({ ...d, name: e.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label className="field__label">Type</label>
+                <select
+                  className="select"
+                  value={allocDraft.mode}
+                  onChange={(e) => setAllocDraft((d) => ({ ...d, mode: e.target.value as "percent" | "fixed" }))}
+                >
+                  <option value="percent">Percent</option>
+                  <option value="fixed">Fixed $</option>
+                </select>
+              </div>
+              <div className="field">
+                <label className="field__label">Value</label>
+                <input
+                  className="input input--mono"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={allocDraft.value || ""}
+                  onChange={(e) => setAllocDraft((d) => ({ ...d, value: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) }))}
+                />
+              </div>
               <button
-                className="btn btn--ghost"
+                className="btn"
                 type="button"
-                onClick={() => setAllocations((xs) => [...xs, { id: newId(), name: "", mode: "percent", value: 0 }])}
+                disabled={!allocDraft.name.trim()}
+                onClick={() => {
+                  if (!allocDraft.name.trim()) return;
+                  setAllocations((xs) => [...xs, { id: newId(), ...allocDraft, name: allocDraft.name.trim() }]);
+                  setAllocDraft({ name: "", mode: "percent", value: 0 });
+                }}
               >
-                + Add category
+                Add
               </button>
             </div>
           </div>

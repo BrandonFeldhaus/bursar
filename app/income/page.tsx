@@ -85,7 +85,7 @@ export default function IncomePage() {
       <header className="sheet page-head">
         <p className="kicker">Income</p>
         <h1 className="page-head__title">Income ledger</h1>
-        <p className="page-head__lead">Maintain the same three-column setup sheet across onboarding and the main income page.</p>
+        <p className="page-head__lead">Track all your income sources. Each one's paycheck dates are calculated independently and feed into your period breakdown.</p>
         <div className="page-head__meta">
           <div className="page-head__meta-item">
             <span className="page-head__meta-label">Sources</span>

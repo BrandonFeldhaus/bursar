@@ -29,6 +29,9 @@ export function SiteHeader() {
           <Link className={`topNavLink ${isActive("/budget") ? "isActive" : ""}`} href="/budget">
             Budget
           </Link>
+          <Link className={`topNavLink ${isActive("/goals") ? "isActive" : ""}`} href="/goals">
+            Goals
+          </Link>
           <Link className={`topNavLink ${isActive("/income") ? "isActive" : ""}`} href="/income">
             Income
           </Link>

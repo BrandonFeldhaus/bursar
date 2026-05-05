@@ -152,7 +152,7 @@ export default function BudgetPage() {
       <header className="sheet page-head">
         <p className="kicker">Budget</p>
         <h1 className="page-head__title">Allocation plan</h1>
-        <p className="page-head__lead">Percentage and fixed plans live in one ruled table. Percentages divide the leftover after fixed dollars.</p>
+        <p className="page-head__lead">Decide how each paycheck's leftover gets divided. Fixed amounts are reserved first; percentages split whatever remains.</p>
         <div className="page-head__meta">
           <div className="page-head__meta-item">
             <span className="page-head__meta-label">Monthly income</span>

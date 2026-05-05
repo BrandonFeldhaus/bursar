@@ -96,19 +96,23 @@ function Timeline({
   );
 }
 
-type TabKey = "income" | "bills" | "leftover";
+type TabKey = "income" | "bills" | "leftover" | "goals";
 
-import type { BudgetCategory } from "./lib/budgetStorage";
+import type { BudgetCategory, Goal } from "./lib/budgetStorage";
 import { computeAllocations } from "./lib/allocations";
 
 function PeriodCard({
   period,
   budgetCategories,
+  goals,
   onTogglePaid,
+  onToggleGoalPeriod,
 }: {
   period: PaycheckPeriod;
   budgetCategories: BudgetCategory[];
+  goals: Goal[];
   onTogglePaid: (expenseId: string, periodId: string) => void;
+  onToggleGoalPeriod: (goalId: string, periodId: string, amount: number) => void;
 }) {
   const [tab, setTab] = useState<TabKey>("bills");
 
@@ -125,6 +129,30 @@ function PeriodCard({
   const allocatedTotal = useMemo(() => allocations.reduce((s, a) => s + a.amount, 0), [allocations]);
   const unallocated = period.leftover - allocatedTotal;
 
+  const periodId = `${period.monthKey}-${period.key}`;
+
+  const goalItems = useMemo(() => {
+    return goals.map((g) => {
+      let linkedAmount = 0;
+      if (g.linkedBudgetCategoryId) {
+        const alloc = allocations.find((a) => a.id === g.linkedBudgetCategoryId);
+        linkedAmount = alloc?.amount ?? 0;
+      } else if (g.linkedExpenseId) {
+        const bill = period.bills.find((b) => b.expenseId === g.linkedExpenseId);
+        linkedAmount = bill?.amount ?? 0;
+      }
+      const applied = g.appliedPeriods.find((p) => p.periodId === periodId);
+      const totalApplied = g.appliedPeriods.reduce((s, p) => s + p.amount, 0);
+      const pct = g.targetAmount > 0 ? Math.min(100, (totalApplied / g.targetAmount) * 100) : 0;
+      return { goal: g, linkedAmount, isApplied: !!applied, totalApplied, pct };
+    });
+  }, [goals, allocations, period.bills, periodId]);
+
+  const totalGoalAmount = useMemo(
+    () => goalItems.reduce((s, gi) => s + gi.linkedAmount, 0),
+    [goalItems],
+  );
+
   return (
     <div className="sheet period-card">
       <div className="period-card__head">
@@ -140,8 +168,8 @@ function PeriodCard({
         </div>
       </div>
 
-      {/* Clickable stat tabs */}
-      <div className="period-card__inline-stats">
+      {/* Clickable stat tabs — 4 columns when goals exist */}
+      <div className={`period-card__inline-stats${goals.length > 0 ? " period-card__inline-stats--4" : ""}`}>
         {(
           [
             { key: "income", label: "Income", value: period.totalIncome, neg: false },
@@ -160,6 +188,17 @@ function PeriodCard({
             <div className={`stat__value${neg ? " stat__value--neg" : ""}`}>{moneyFmt(value)}</div>
           </button>
         ))}
+        {goals.length > 0 && (
+          <button
+            type="button"
+            className={`period-card__tab period-card__inline-stat${tab === "goals" ? " period-card__tab--active" : ""}`}
+            onClick={() => setTab("goals")}
+            aria-pressed={tab === "goals"}
+          >
+            <div className="stat__label">Goals</div>
+            <div className="stat__value">{goals.length}</div>
+          </button>
+        )}
       </div>
 
       {/* List content driven by active tab */}
@@ -228,6 +267,64 @@ function PeriodCard({
                 <div className="recent-item" style={{ opacity: 0.55 }}>
                   <span className="recent-item__name" style={{ fontStyle: "italic" }}>Unallocated</span>
                   <Money value={unallocated} />
+                </div>
+              )}
+            </>
+          )
+        )}
+
+        {tab === "goals" && (
+          goalItems.length === 0 ? (
+            <p className="muted" style={{ fontStyle: "italic" }}>No goals yet. Add them in the Goals page.</p>
+          ) : (
+            <>
+              {goalItems.map(({ goal, linkedAmount, isApplied, totalApplied, pct }) => (
+                <div key={goal.id} className="goal-period-item">
+                  <div className="recent-item" style={{ marginBottom: 0 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={isApplied}
+                        onChange={() => onToggleGoalPeriod(goal.id, periodId, linkedAmount)}
+                        style={{ accentColor: "var(--ink-1)", cursor: linkedAmount > 0 ? "pointer" : "not-allowed", opacity: linkedAmount > 0 ? 1 : 0.4 }}
+                        disabled={linkedAmount <= 0}
+                        title={linkedAmount > 0
+                          ? (isApplied ? "Remove contribution" : "Apply contribution")
+                          : "No linked amount — set a link in Goals"
+                        }
+                      />
+                      <span className="recent-item__name">{goal.name}</span>
+                      <span className="badge" style={{ fontSize: 9 }}>
+                        {goal.type === "savings" ? "savings" : "debt"}
+                      </span>
+                    </span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {linkedAmount > 0 ? (
+                        <Money value={linkedAmount} />
+                      ) : (
+                        <span style={{ fontFamily: "var(--font-stamp)", fontSize: 10, color: "var(--ink-4)", letterSpacing: "0.12em" }}>no link</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="goal-period-item__bar">
+                    <div
+                      className="goal-period-item__fill"
+                      style={{
+                        width: `${pct}%`,
+                        background: pct >= 100 ? "#2f6a4a" : goal.type === "debt" ? "var(--signal-red)" : "var(--ink-1)",
+                      }}
+                    />
+                  </div>
+                  <div className="goal-period-item__meta">
+                    <span>{moneyFmt(totalApplied)} applied</span>
+                    <span>{pct.toFixed(0)}% of {moneyFmt(goal.targetAmount)}</span>
+                  </div>
+                </div>
+              ))}
+              {totalGoalAmount > 0 && (
+                <div className="recent-item" style={{ marginTop: 4, opacity: 0.6 }}>
+                  <span className="recent-item__name" style={{ fontStyle: "italic" }}>Total linked</span>
+                  <Money value={totalGoalAmount} />
                 </div>
               )}
             </>
@@ -313,6 +410,25 @@ export default function Home() {
           if (e.id !== expenseId) return e;
           const paid = e.paidPeriods ?? [];
           return { ...e, paidPeriods: paid.includes(periodId) ? paid.filter((p) => p !== periodId) : [...paid, periodId] };
+        }),
+      };
+    });
+  }
+
+  function toggleGoalPeriod(goalId: string, periodId: string, amount: number) {
+    setState((s) => {
+      if (!s) return s;
+      return {
+        ...s,
+        goals: s.goals.map((g) => {
+          if (g.id !== goalId) return g;
+          const exists = g.appliedPeriods.find((p) => p.periodId === periodId);
+          return {
+            ...g,
+            appliedPeriods: exists
+              ? g.appliedPeriods.filter((p) => p.periodId !== periodId)
+              : [...g.appliedPeriods, { periodId, amount }],
+          };
         }),
       };
     });
@@ -424,7 +540,14 @@ export default function Home() {
       {/* Paycheck period cards — one per paycheck date */}
       <div className="period-grid">
         {periods.map((p) => (
-          <PeriodCard key={p.key} period={p} budgetCategories={state.budgetCategories} onTogglePaid={togglePaid} />
+          <PeriodCard
+            key={p.key}
+            period={p}
+            budgetCategories={state.budgetCategories}
+            goals={state.goals}
+            onTogglePaid={togglePaid}
+            onToggleGoalPeriod={toggleGoalPeriod}
+          />
         ))}
       </div>
     </section>

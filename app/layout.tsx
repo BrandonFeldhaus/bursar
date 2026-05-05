@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </main>
 
         <footer className="footer" aria-label="Footer">
-          <p>Paper &amp; Ink Ledger. Stored locally under budgetApp:v1.</p>
+          <p>Paper &amp; Ink Ledger. Stored locally.</p>
         </footer>
 
         {/* Mobile-only bottom navigation */}

@@ -36,6 +36,16 @@ export type BudgetCategory = {
   value: number;
 };
 
+export type Goal = {
+  id: string;
+  name: string;
+  type: "savings" | "debt";
+  targetAmount: number;
+  linkedBudgetCategoryId?: string;
+  linkedExpenseId?: string;
+  appliedPeriods: { periodId: string; amount: number }[];
+};
+
 // Kept for backward compat migration only
 export type OnboardingExpense = {
   id: string;
@@ -68,6 +78,7 @@ export type BudgetState = {
   incomes: Income[];
   paycheckAmount: number;
   budgetCategories: BudgetCategory[];
+  goals: Goal[];
 };
 
 export function newId() {
@@ -92,6 +103,7 @@ export function defaultBudget(overrides?: Partial<BudgetState>): BudgetState {
     incomes: [],
     paycheckAmount: 0,
     budgetCategories: [],
+    goals: [],
   };
 
   return {
@@ -108,6 +120,7 @@ export function defaultBudget(overrides?: Partial<BudgetState>): BudgetState {
     recurringExpenses: Array.isArray(overrides?.recurringExpenses) ? overrides.recurringExpenses : base.recurringExpenses,
     incomes: Array.isArray(overrides?.incomes) ? overrides.incomes : base.incomes,
     budgetCategories: Array.isArray(overrides?.budgetCategories) ? overrides.budgetCategories : base.budgetCategories,
+    goals: Array.isArray(overrides?.goals) ? overrides.goals : base.goals,
   };
 }
 
@@ -162,6 +175,27 @@ function normalizeBudgetCategories(parsed: any): BudgetCategory[] {
     .filter((c: BudgetCategory) => c.name.trim().length > 0);
 }
 
+function normalizeGoals(raw: any[]): Goal[] {
+  return raw
+    .map((g: any) => ({
+      id: typeof g?.id === "string" ? g.id : newId(),
+      name: typeof g?.name === "string" ? g.name : "",
+      type: g?.type === "debt" ? ("debt" as const) : ("savings" as const),
+      targetAmount: Math.max(0, Number(g?.targetAmount ?? 0) || 0),
+      linkedBudgetCategoryId: typeof g?.linkedBudgetCategoryId === "string" ? g.linkedBudgetCategoryId : undefined,
+      linkedExpenseId: typeof g?.linkedExpenseId === "string" ? g.linkedExpenseId : undefined,
+      appliedPeriods: Array.isArray(g?.appliedPeriods)
+        ? g.appliedPeriods
+            .map((p: any) => ({
+              periodId: typeof p?.periodId === "string" ? p.periodId : "",
+              amount: Math.max(0, Number(p?.amount ?? 0) || 0),
+            }))
+            .filter((p: { periodId: string; amount: number }) => p.periodId.length > 0)
+        : [],
+    }))
+    .filter((g: Goal) => g.name.trim().length > 0);
+}
+
 function normalizeParsed(parsed: any): BudgetState {
   const payCycle: PayCycle = parsed?.payCycle === "semimonthly" ? "semimonthly" : "biweekly";
   const paycheckAmount = Math.max(0, Number(parsed?.paycheckAmount ?? parsed?.settings?.paycheckAmount ?? 0) || 0);
@@ -173,6 +207,7 @@ function normalizeParsed(parsed: any): BudgetState {
 
   const incomes: Income[] = Array.isArray(parsed?.incomes) ? parsed.incomes : [];
   const budgetCategories = normalizeBudgetCategories(parsed);
+  const goals = normalizeGoals(Array.isArray(parsed?.goals) ? parsed.goals : []);
 
   return defaultBudget({
     settings: { payCycleType, paycheckAmount },
@@ -188,6 +223,7 @@ function normalizeParsed(parsed: any): BudgetState {
     incomes,
     paycheckAmount,
     budgetCategories,
+    goals,
   });
 }
 

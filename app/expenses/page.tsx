@@ -151,7 +151,7 @@ export default function ExpensesPage() {
         <header className="sheet page-head">
           <p className="kicker">Expenses</p>
           <h1 className="page-head__title">Bill notations</h1>
-          <p className="page-head__lead">Loading the ruled bill register…</p>
+          <p className="page-head__lead">Loading your bill register…</p>
         </header>
       </section>
     );
@@ -165,7 +165,7 @@ export default function ExpensesPage() {
       <header className="sheet page-head">
         <p className="kicker">Expenses</p>
         <h1 className="page-head__title">Bill notations</h1>
-        <p className="page-head__lead">Track each recurring notation. Annual costs are spread across the year automatically.</p>
+        <p className="page-head__lead">Log your recurring bills here. Annual expenses are divided across 12 months so every period shares the cost evenly.</p>
         <div className="page-head__meta">
           <div className="page-head__meta-item">
             <span className="page-head__meta-label">Monthly bills</span>

@@ -66,14 +66,8 @@ export default function SettingsPage() {
       {/* Page head */}
       <header className="sheet page-head">
         <p className="kicker">Settings</p>
-        <h1 className="page-head__title">Archive tools</h1>
-        <p className="page-head__lead">Manage exports, imports, and onboarding resets without changing the local storage key.</p>
-        <div className="page-head__meta">
-          <div className="page-head__meta-item">
-            <span className="page-head__meta-label">Storage key</span>
-            <span className="page-head__meta-value">paperInkLedger:v1</span>
-          </div>
-        </div>
+        <h1 className="page-head__title">Data &amp; backup</h1>
+        <p className="page-head__lead">Back up your ledger, restore from a saved file, or reset the app to start fresh.</p>
       </header>
 
       {/* Settings cards */}
@@ -86,7 +80,7 @@ export default function SettingsPage() {
             </div>
             <span className="badge">v1</span>
           </div>
-          <p className="muted">Export your ledger as JSON or import a previous archive into the same local versioned key.</p>
+          <p className="muted">Save your full ledger to a JSON file, or load it back from a previously exported file.</p>
           <div className="settings-actions">
             <button className="btn" type="button" onClick={exportData}>
               Export JSON
@@ -105,7 +99,7 @@ export default function SettingsPage() {
               <h2 className="section-title">Onboarding reset</h2>
             </div>
           </div>
-          <p className="muted">Clears local data and returns to the three-step flow. Use this only if you want to restart the ledger from a blank state on this device.</p>
+          <p className="muted">Wipes all local data and returns to onboarding. Use this if you want to start fresh on this device.</p>
           <div className="settings-actions">
             <button className="btn btn--danger" type="button" onClick={resetOnboarding}>
               Reset onboarding
