@@ -16,6 +16,7 @@ export function makeState(
     paycheckAmount: 0,
     budgetCategories: categories,
     goals: [],
+    lockedMonths: [],
   };
 }
 

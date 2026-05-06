@@ -98,7 +98,7 @@ function Timeline({
 
 type TabKey = "income" | "bills" | "leftover" | "goals";
 
-import type { BudgetCategory, Goal } from "./lib/budgetStorage";
+import type { BudgetCategory, Goal, LockedMonth } from "./lib/budgetStorage";
 import { computeAllocations } from "./lib/allocations";
 
 function PeriodCard({
@@ -107,12 +107,14 @@ function PeriodCard({
   goals,
   onTogglePaid,
   onToggleGoalPeriod,
+  readOnly = false,
 }: {
   period: PaycheckPeriod;
   budgetCategories: BudgetCategory[];
   goals: Goal[];
   onTogglePaid: (expenseId: string, periodId: string) => void;
   onToggleGoalPeriod: (goalId: string, periodId: string, amount: number) => void;
+  readOnly?: boolean;
 }) {
   const [tab, setTab] = useState<TabKey>("bills");
 
@@ -133,16 +135,19 @@ function PeriodCard({
 
   const goalItems = useMemo(() => {
     return goals.map((g) => {
-      let linkedAmount = 0;
-      if (g.linkedBudgetCategoryId) {
-        const alloc = allocations.find((a) => a.id === g.linkedBudgetCategoryId);
-        linkedAmount = alloc?.amount ?? 0;
-      } else if (g.linkedExpenseId) {
-        const bill = period.bills.find((b) => b.expenseId === g.linkedExpenseId);
-        linkedAmount = bill?.amount ?? 0;
-      }
+      const catAmount = g.linkedBudgetCategoryIds.reduce((s, catId) => {
+        const alloc = allocations.find((a) => a.id === catId);
+        return s + (alloc?.amount ?? 0);
+      }, 0);
+      const expAmount = g.linkedExpenseIds.reduce((s, expId) => {
+        const bill = period.bills.find((b) => b.expenseId === expId);
+        return s + (bill?.amount ?? 0);
+      }, 0);
+      const linkedAmount = catAmount + expAmount;
       const applied = g.appliedPeriods.find((p) => p.periodId === periodId);
-      const totalApplied = g.appliedPeriods.reduce((s, p) => s + p.amount, 0);
+      const totalApplied =
+        g.appliedPeriods.reduce((s, p) => s + p.amount, 0) +
+        g.manualAdjustments.reduce((s, a) => s + a.amount, 0);
       const pct = g.targetAmount > 0 ? Math.min(100, (totalApplied / g.targetAmount) * 100) : 0;
       return { goal: g, linkedAmount, isApplied: !!applied, totalApplied, pct };
     });
@@ -168,8 +173,8 @@ function PeriodCard({
         </div>
       </div>
 
-      {/* Clickable stat tabs — 4 columns when goals exist */}
-      <div className={`period-card__inline-stats${goals.length > 0 ? " period-card__inline-stats--4" : ""}`}>
+      {/* 3-column stat tabs — always 3 cols regardless of goals */}
+      <div className="period-card__inline-stats">
         {(
           [
             { key: "income", label: "Income", value: period.totalIncome, neg: false },
@@ -188,18 +193,18 @@ function PeriodCard({
             <div className={`stat__value${neg ? " stat__value--neg" : ""}`}>{moneyFmt(value)}</div>
           </button>
         ))}
-        {goals.length > 0 && (
-          <button
-            type="button"
-            className={`period-card__tab period-card__inline-stat${tab === "goals" ? " period-card__tab--active" : ""}`}
-            onClick={() => setTab("goals")}
-            aria-pressed={tab === "goals"}
-          >
-            <div className="stat__label">Goals</div>
-            <div className="stat__value">{goals.length}</div>
-          </button>
-        )}
       </div>
+      {goals.length > 0 && (
+        <button
+          type="button"
+          className={`period-card__goals-tab${tab === "goals" ? " period-card__goals-tab--active" : ""}`}
+          onClick={() => setTab("goals")}
+          aria-pressed={tab === "goals"}
+        >
+          <span className="stat__label">Goals</span>
+          <span className="period-card__goals-tab__count">{goals.length} active</span>
+        </button>
+      )}
 
       {/* List content driven by active tab */}
       <div className="recent-list">
@@ -229,9 +234,10 @@ function PeriodCard({
                   <input
                     type="checkbox"
                     checked={b.paid}
-                    onChange={() => onTogglePaid(b.expenseId, b.periodId)}
-                    style={{ accentColor: "var(--ink-1)", cursor: "pointer" }}
-                    title={b.paid ? "Mark unpaid" : "Mark paid"}
+                    onChange={() => !readOnly && onTogglePaid(b.expenseId, b.periodId)}
+                    disabled={readOnly}
+                    style={{ accentColor: "var(--ink-1)", cursor: readOnly ? "default" : "pointer", opacity: readOnly ? 0.5 : 1 }}
+                    title={readOnly ? "Locked — unlock month to edit" : (b.paid ? "Mark unpaid" : "Mark paid")}
                   />
                   <span className="recent-item__name">{b.name}</span>
                   {b.cadence === "annual" && (
@@ -285,10 +291,10 @@ function PeriodCard({
                       <input
                         type="checkbox"
                         checked={isApplied}
-                        onChange={() => onToggleGoalPeriod(goal.id, periodId, linkedAmount)}
-                        style={{ accentColor: "var(--ink-1)", cursor: linkedAmount > 0 ? "pointer" : "not-allowed", opacity: linkedAmount > 0 ? 1 : 0.4 }}
-                        disabled={linkedAmount <= 0}
-                        title={linkedAmount > 0
+                        onChange={() => !readOnly && onToggleGoalPeriod(goal.id, periodId, linkedAmount)}
+                        style={{ accentColor: "var(--ink-1)", cursor: (readOnly || linkedAmount <= 0) ? (readOnly ? "default" : "not-allowed") : "pointer", opacity: (readOnly || linkedAmount <= 0) ? 0.4 : 1 }}
+                        disabled={readOnly || linkedAmount <= 0}
+                        title={readOnly ? "Locked — unlock month to edit" : linkedAmount > 0
                           ? (isApplied ? "Remove contribution" : "Apply contribution")
                           : "No linked amount — set a link in Goals"
                         }
@@ -339,6 +345,7 @@ export default function Home() {
   const hydrated = useHydrated();
   const [state, setState] = useState<BudgetState | null>(null);
   const [month, setMonth] = useState(currentMonthKey());
+  const [isUnlocked, setIsUnlocked] = useState(false);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -350,8 +357,34 @@ export default function Home() {
     saveState(state);
   }, [hydrated, state]);
 
+  // Reset unlock whenever the user navigates months
+  useEffect(() => {
+    setIsUnlocked(false);
+  }, [month]);
+
+  const cmk = currentMonthKey();
+  const isPastMonth = month < cmk;
+  const lockedMonth: LockedMonth | null = state?.lockedMonths.find((lm) => lm.monthKey === month) ?? null;
+  const isArchived = !!lockedMonth;
+  const isReadOnly = isPastMonth && !isUnlocked;
+
+  // Use the archived snapshot's data when the month is locked, else live state
+  const stateForMonth = useMemo((): BudgetState | null => {
+    if (!state) return null;
+    if (isArchived && !isUnlocked && lockedMonth) {
+      return {
+        ...state,
+        incomes: lockedMonth.incomes,
+        recurringExpenses: lockedMonth.recurringExpenses,
+        budgetCategories: lockedMonth.budgetCategories,
+        goals: lockedMonth.goals,
+      };
+    }
+    return state;
+  }, [state, isArchived, isUnlocked, lockedMonth]);
+
   // Paycheck-based periods replace the old fixed-half periods
-  const periods = useMemo(() => (state ? paycheckPeriodsForMonth(state, month) : []), [state, month]);
+  const periods = useMemo(() => (stateForMonth ? paycheckPeriodsForMonth(stateForMonth, month) : []), [stateForMonth, month]);
 
   const totals = useMemo(
     () =>
@@ -366,10 +399,10 @@ export default function Home() {
 
   // Build timeline events from the period data so paid status is consistent
   const events = useMemo(() => {
-    if (!state) return [];
+    if (!stateForMonth) return [];
     const evts: { kind: string; day: number; label: string; tooltip: string }[] = [];
     // Income events
-    state.incomes.forEach((inc) => {
+    stateForMonth.incomes.forEach((inc) => {
       incomeDatesForMonth(inc, month).forEach((d) => {
         evts.push({ kind: "income", day: d.getDate(), label: moneyFmt(inc.amount), tooltip: inc.name });
       });
@@ -377,7 +410,7 @@ export default function Home() {
     // Bill events — paid status from the period data
     const billPaid = new Map<string, boolean>();
     periods.forEach((p) => p.bills.forEach((b) => billPaid.set(b.expenseId, b.paid)));
-    state.recurringExpenses.forEach((exp) => {
+    stateForMonth.recurringExpenses.forEach((exp) => {
       const due = recurringDueDate(exp, month);
       if (!due) return;
       const paid = billPaid.get(exp.id) ?? false;
@@ -385,7 +418,7 @@ export default function Home() {
       evts.push({ kind: paid ? "paid" : "bill", day: due.getDate(), label: moneyFmt(amt), tooltip: exp.name });
     });
     return evts;
-  }, [state, month, periods]);
+  }, [stateForMonth, month, periods]);
 
   const dayBalances = useMemo(() => {
     let running = 0;
@@ -434,11 +467,27 @@ export default function Home() {
     });
   }
 
+  function archiveMonth() {
+    setState((s) => {
+      if (!s) return s;
+      const snapshot: LockedMonth = {
+        monthKey: month,
+        lockedAt: new Date().toISOString(),
+        incomes: JSON.parse(JSON.stringify(s.incomes)),
+        recurringExpenses: JSON.parse(JSON.stringify(s.recurringExpenses)),
+        budgetCategories: JSON.parse(JSON.stringify(s.budgetCategories)),
+        goals: JSON.parse(JSON.stringify(s.goals)),
+      };
+      const rest = s.lockedMonths.filter((lm) => lm.monthKey !== month);
+      return { ...s, lockedMonths: [...rest, snapshot] };
+    });
+  }
+
   const today = new Date();
   const todayIsThisMonth = today.getFullYear() === year && today.getMonth() === monthIndex;
   const todayDay = todayIsThisMonth ? today.getDate() : null;
 
-  if (!hydrated || !state) {
+  if (!hydrated || !state || !stateForMonth) {
     return (
       <section className="container">
         <header className="sheet page-head">
@@ -480,16 +529,48 @@ export default function Home() {
         <div className="row-between">
           <div>
             <p className="kicker">Ledger month</p>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 32, lineHeight: 1.1, color: "var(--ink-1)" }}>
-              {formatMonthLabel(month)}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 32, lineHeight: 1.1, color: "var(--ink-1)" }}>
+                {formatMonthLabel(month)}
+              </div>
+              {isReadOnly && (
+                <span className="stamp" style={{ fontSize: 10, padding: "2px 7px", letterSpacing: "0.12em" }}>
+                  {isArchived ? "Archived" : "Past"}
+                </span>
+              )}
             </div>
           </div>
-          <div className="row gap-sm">
+          <div className="row gap-sm" style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {isPastMonth && !isArchived && (
+              <button className="btn btn--ghost" type="button" onClick={archiveMonth} title="Snapshot this month's data so it won't change with future edits">
+                Archive
+              </button>
+            )}
+            {isPastMonth && isArchived && !isUnlocked && (
+              <button className="btn btn--ghost" type="button" onClick={() => setIsUnlocked(true)} title="Temporarily use live data and allow editing">
+                Unlock
+              </button>
+            )}
+            {isPastMonth && isUnlocked && (
+              <button className="btn btn--ghost" type="button" onClick={() => setIsUnlocked(false)} title="Return to archived snapshot">
+                Re-lock
+              </button>
+            )}
             <button className="btn btn--ghost" type="button" onClick={() => setMonth(shiftMonth(month, -1))}>‹ Prev</button>
             <button className="btn btn--ghost" type="button" onClick={() => setMonth(currentMonthKey())}>Today</button>
             <button className="btn btn--ghost" type="button" onClick={() => setMonth(shiftMonth(month, 1))}>Next ›</button>
           </div>
         </div>
+        {isPastMonth && !isArchived && (
+          <p className="muted" style={{ marginTop: 8, fontStyle: "italic", fontSize: 13 }}>
+            This month is not archived. Changes to income, expenses, or budget categories will affect its display. Archive to freeze a snapshot.
+          </p>
+        )}
+        {isPastMonth && isUnlocked && (
+          <p className="muted" style={{ marginTop: 8, fontStyle: "italic", fontSize: 13 }}>
+            Unlocked — showing live data. Re-lock to restore the archived snapshot.
+          </p>
+        )}
       </div>
 
       {/* Month stats row */}
@@ -543,10 +624,11 @@ export default function Home() {
           <PeriodCard
             key={p.key}
             period={p}
-            budgetCategories={state.budgetCategories}
-            goals={state.goals}
+            budgetCategories={stateForMonth.budgetCategories}
+            goals={stateForMonth.goals}
             onTogglePaid={togglePaid}
             onToggleGoalPeriod={toggleGoalPeriod}
+            readOnly={isReadOnly}
           />
         ))}
       </div>

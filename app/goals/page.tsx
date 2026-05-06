@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type Dispatch, type SetStateAction, Fragment, useEffect, useMemo, useState } from "react";
 import { loadState, newId, saveState, type BudgetState, type Goal } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
 
@@ -20,31 +20,152 @@ function GoalProgressBar({ pct, type }: { pct: number; type: "savings" | "debt" 
   );
 }
 
-type LinkValue = "" | `cat:${string}` | `exp:${string}`;
+function goalTotalApplied(g: Goal): number {
+  return (
+    g.appliedPeriods.reduce((s, p) => s + p.amount, 0) +
+    g.manualAdjustments.reduce((s, a) => s + a.amount, 0)
+  );
+}
+
+function parseAdjAmount(raw: string): number {
+  return parseFloat(raw.replace(/−/g, "-").replace(/[^0-9.\-]/g, ""));
+}
 
 type DraftGoal = {
   name: string;
   type: "savings" | "debt";
   targetAmount: number;
-  link: LinkValue;
+  linkedBudgetCategoryIds: string[];
+  linkedExpenseIds: string[];
 };
 
-function parseLinkValue(val: LinkValue): { linkedBudgetCategoryId?: string; linkedExpenseId?: string } {
-  if (val.startsWith("cat:")) return { linkedBudgetCategoryId: val.slice(4) };
-  if (val.startsWith("exp:")) return { linkedExpenseId: val.slice(4) };
-  return {};
-}
-
-function makeLinkValue(goal: Goal): LinkValue {
-  if (goal.linkedBudgetCategoryId) return `cat:${goal.linkedBudgetCategoryId}`;
-  if (goal.linkedExpenseId) return `exp:${goal.linkedExpenseId}`;
-  return "";
+function AddGoalForm({
+  draft,
+  setDraft,
+  onAdd,
+  budgetCategories,
+  recurringExpenses,
+}: {
+  draft: DraftGoal;
+  setDraft: Dispatch<SetStateAction<DraftGoal>>;
+  onAdd: () => void;
+  budgetCategories: { id: string; name: string }[];
+  recurringExpenses: { id: string; name: string }[];
+}) {
+  const hasLinkable = budgetCategories.length > 0 || recurringExpenses.length > 0;
+  const sunkStyle = { background: "var(--surface-sunk)" } as const;
+  return (
+    <>
+      <div className="inline-form inline-form--3col" style={{ ...sunkStyle, borderRadius: 0, paddingBottom: 12 }}>
+        <div className="field">
+          <label className="field__label">Goal name</label>
+          <input
+            className="input"
+            placeholder="e.g. Emergency fund"
+            value={draft.name}
+            onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+            onKeyDown={(e) => e.key === "Enter" && onAdd()}
+          />
+        </div>
+        <div className="field">
+          <label className="field__label">Type</label>
+          <select
+            className="select"
+            value={draft.type}
+            onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value as "savings" | "debt" }))}
+          >
+            <option value="savings">Savings</option>
+            <option value="debt">Debt</option>
+          </select>
+        </div>
+        <div className="field">
+          <label className="field__label">Target amount</label>
+          <input
+            className="input input--mono"
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
+            value={draft.targetAmount || ""}
+            onChange={(e) =>
+              setDraft((d) => ({
+                ...d,
+                targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0),
+              }))
+            }
+            onKeyDown={(e) => e.key === "Enter" && onAdd()}
+          />
+        </div>
+      </div>
+      {hasLinkable && (
+        <div style={{ ...sunkStyle, padding: "0 24px 12px" }}>
+          <p className="field__label" style={{ marginBottom: 6 }}>Link to</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 20px" }}>
+            {budgetCategories.map((c) => {
+              const checked = draft.linkedBudgetCategoryIds.includes(c.id);
+              return (
+                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        linkedBudgetCategoryIds: checked
+                          ? d.linkedBudgetCategoryIds.filter((id) => id !== c.id)
+                          : [...d.linkedBudgetCategoryIds, c.id],
+                      }))
+                    }
+                    style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
+                  />
+                  {c.name}
+                </label>
+              );
+            })}
+            {recurringExpenses.map((e) => {
+              const checked = draft.linkedExpenseIds.includes(e.id);
+              return (
+                <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        linkedExpenseIds: checked
+                          ? d.linkedExpenseIds.filter((id) => id !== e.id)
+                          : [...d.linkedExpenseIds, e.id],
+                      }))
+                    }
+                    style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
+                  />
+                  {e.name}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <div style={{ ...sunkStyle, padding: "8px 24px 18px", borderRadius: "0 0 var(--radius-lg) var(--radius-lg)" }}>
+        <button
+          className="btn"
+          type="button"
+          onClick={onAdd}
+          disabled={!draft.name.trim() || draft.targetAmount <= 0}
+        >
+          Add goal
+        </button>
+      </div>
+    </>
+  );
 }
 
 export default function GoalsPage() {
   const hydrated = useHydrated();
   const [state, setState] = useState<BudgetState | null>(null);
-  const [draft, setDraft] = useState<DraftGoal>({ name: "", type: "savings", targetAmount: 0, link: "" });
+  const [draft, setDraft] = useState<DraftGoal>({ name: "", type: "savings", targetAmount: 0, linkedBudgetCategoryIds: [], linkedExpenseIds: [] });
+  const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
+  const [adjAmount, setAdjAmount] = useState("");
+  const [adjNote, setAdjNote] = useState("");
 
   useEffect(() => {
     if (!hydrated) return;
@@ -59,7 +180,6 @@ export default function GoalsPage() {
   function addGoal() {
     const name = draft.name.trim();
     if (!name || draft.targetAmount <= 0) return;
-    const linkFields = parseLinkValue(draft.link);
     setState((s) => {
       if (!s) return s;
       const newGoal: Goal = {
@@ -67,35 +187,59 @@ export default function GoalsPage() {
         name,
         type: draft.type,
         targetAmount: draft.targetAmount,
+        linkedBudgetCategoryIds: draft.linkedBudgetCategoryIds,
+        linkedExpenseIds: draft.linkedExpenseIds,
+        manualAdjustments: [],
         appliedPeriods: [],
-        ...linkFields,
       };
       return { ...s, goals: [...s.goals, newGoal] };
     });
-    setDraft({ name: "", type: "savings", targetAmount: 0, link: "" });
+    setDraft({ name: "", type: "savings", targetAmount: 0, linkedBudgetCategoryIds: [], linkedExpenseIds: [] });
   }
 
   function updateGoal(id: string, patch: Partial<Goal>) {
     setState((s) => s ? { ...s, goals: s.goals.map((g) => g.id === id ? { ...g, ...patch } : g) } : s);
   }
 
-  function updateGoalLink(id: string, val: LinkValue) {
-    const linkFields: Partial<Goal> = parseLinkValue(val);
-    // Clear both link fields first
-    setState((s) =>
-      s ? {
-        ...s,
-        goals: s.goals.map((g) =>
-          g.id === id
-            ? { ...g, linkedBudgetCategoryId: undefined, linkedExpenseId: undefined, ...linkFields }
-            : g
-        ),
-      } : s
-    );
-  }
-
   function removeGoal(id: string) {
     setState((s) => s ? { ...s, goals: s.goals.filter((g) => g.id !== id) } : s);
+    if (expandedGoalId === id) setExpandedGoalId(null);
+  }
+
+  function addManualAdjustment(goalId: string) {
+    const amt = parseAdjAmount(adjAmount);
+    if (isNaN(amt) || amt === 0) return;
+    setState((s) => {
+      if (!s) return s;
+      return {
+        ...s,
+        goals: s.goals.map((g) => {
+          if (g.id !== goalId) return g;
+          return {
+            ...g,
+            manualAdjustments: [
+              ...g.manualAdjustments,
+              { id: newId(), amount: amt, note: adjNote.trim() || undefined },
+            ],
+          };
+        }),
+      };
+    });
+    setAdjAmount("");
+    setAdjNote("");
+  }
+
+  function removeManualAdjustment(goalId: string, adjId: string) {
+    setState((s) => {
+      if (!s) return s;
+      return {
+        ...s,
+        goals: s.goals.map((g) => {
+          if (g.id !== goalId) return g;
+          return { ...g, manualAdjustments: g.manualAdjustments.filter((a) => a.id !== adjId) };
+        }),
+      };
+    });
   }
 
   const derived = useMemo(() => {
@@ -103,7 +247,7 @@ export default function GoalsPage() {
     let totalApplied = 0;
     let completed = 0;
     for (const g of state.goals) {
-      const applied = g.appliedPeriods.reduce((s, p) => s + p.amount, 0);
+      const applied = goalTotalApplied(g);
       totalApplied += applied;
       if (applied >= g.targetAmount) completed++;
     }
@@ -132,7 +276,7 @@ export default function GoalsPage() {
         <p className="kicker">Goals</p>
         <h1 className="page-head__title">Goals &amp; Targets</h1>
         <p className="page-head__lead">
-          Track savings targets and debt payoff progress. Link a goal to a budget category or recurring bill so the overview widget can apply contributions each paycheck period.
+          Track savings targets and debt payoff progress. Link a goal to multiple budget categories or recurring bills so the period widget can apply contributions each paycheck.
         </p>
         <div className="page-head__meta">
           <div className="page-head__meta-item">
@@ -154,12 +298,15 @@ export default function GoalsPage() {
       {goals.length > 0 && (
         <div className="goal-cards">
           {goals.map((g) => {
-            const applied = g.appliedPeriods.reduce((s, p) => s + p.amount, 0);
+            const applied = goalTotalApplied(g);
             const pct = g.targetAmount > 0 ? (applied / g.targetAmount) * 100 : 0;
             const remaining = Math.max(0, g.targetAmount - applied);
-            const linkedCat = budgetCategories.find((c) => c.id === g.linkedBudgetCategoryId);
-            const linkedExp = recurringExpenses.find((e) => e.id === g.linkedExpenseId);
-            const linkLabel = linkedCat ? linkedCat.name : linkedExp ? linkedExp.name : null;
+            const linkedCats = g.linkedBudgetCategoryIds
+              .map((id) => budgetCategories.find((c) => c.id === id))
+              .filter(Boolean) as { id: string; name: string }[];
+            const linkedExps = g.linkedExpenseIds
+              .map((id) => recurringExpenses.find((e) => e.id === id))
+              .filter(Boolean) as { id: string; name: string }[];
 
             return (
               <div key={g.id} className="sheet goal-card">
@@ -196,13 +343,15 @@ export default function GoalsPage() {
                 </div>
 
                 <div className="goal-card__footer">
-                  {linkLabel ? (
-                    <span className="badge" style={{ fontSize: 10 }}>
-                      Linked: {linkLabel}
-                    </span>
-                  ) : (
-                    <span className="badge" style={{ fontSize: 10, opacity: 0.5 }}>No link</span>
-                  )}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {linkedCats.length === 0 && linkedExps.length === 0
+                      ? <span className="badge" style={{ fontSize: 10, opacity: 0.5 }}>No link</span>
+                      : <>
+                          {linkedCats.map((c) => <span key={`cat:${c.id}`} className="badge" style={{ fontSize: 10 }}>{c.name}</span>)}
+                          {linkedExps.map((e) => <span key={`exp:${e.id}`} className="badge" style={{ fontSize: 10 }}>{e.name}</span>)}
+                        </>
+                    }
+                  </div>
                   {remaining > 0 && (
                     <span style={{ fontFamily: "var(--font-hand)", fontSize: 14, color: "var(--ink-3)" }}>
                       {moneyFmt(remaining)} to go
@@ -237,164 +386,217 @@ export default function GoalsPage() {
             <table className="ledger-table">
               <thead>
                 <tr>
-                  <th style={{ width: "30%" }}>Goal</th>
-                  <th style={{ width: "12%" }}>Type</th>
-                  <th style={{ width: "14%" }}>Target</th>
-                  <th style={{ width: "12%" }}>Applied</th>
-                  <th style={{ width: "27%" }}>Linked to</th>
-                  <th className="text-tight" />
+                  <th style={{ width: "24%" }}>Goal</th>
+                  <th style={{ width: "9%" }}>Type</th>
+                  <th style={{ width: "11%" }}>Target</th>
+                  <th style={{ width: "10%" }}>Applied</th>
+                  <th style={{ width: "38%" }}>Linked to</th>
+                  <th className="text-tight" style={{ width: "8%" }} />
                 </tr>
               </thead>
               <tbody>
                 {goals.map((g) => {
-                  const applied = g.appliedPeriods.reduce((s, p) => s + p.amount, 0);
-                  const linkVal = makeLinkValue(g);
+                  const applied = goalTotalApplied(g);
+                  const isExpanded = expandedGoalId === g.id;
                   return (
-                    <tr key={g.id}>
-                      <td>
-                        <input
-                          className="input"
-                          value={g.name}
-                          onChange={(e) => updateGoal(g.id, { name: e.target.value })}
-                        />
-                      </td>
-                      <td>
-                        <select
-                          className="select"
-                          value={g.type}
-                          onChange={(e) => updateGoal(g.id, { type: e.target.value as "savings" | "debt" })}
-                        >
-                          <option value="savings">Savings</option>
-                          <option value="debt">Debt</option>
-                        </select>
-                      </td>
-                      <td className="mono">
-                        <input
-                          className="input input--mono"
-                          type="text"
-                          inputMode="decimal"
-                          value={g.targetAmount || ""}
-                          onChange={(e) =>
-                            updateGoal(g.id, {
-                              targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0),
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="mono">{moneyFmt(applied)}</td>
-                      <td>
-                        <select
-                          className="select"
-                          value={linkVal}
-                          onChange={(e) => updateGoalLink(g.id, e.target.value as LinkValue)}
-                        >
-                          <option value="">None</option>
-                          {budgetCategories.length > 0 && (
-                            <optgroup label="Budget categories">
-                              {budgetCategories.map((c) => (
-                                <option key={c.id} value={`cat:${c.id}`}>{c.name}</option>
-                              ))}
-                            </optgroup>
-                          )}
-                          {recurringExpenses.length > 0 && (
-                            <optgroup label="Recurring bills">
-                              {recurringExpenses.map((e) => (
-                                <option key={e.id} value={`exp:${e.id}`}>{e.name}</option>
-                              ))}
-                            </optgroup>
-                          )}
-                        </select>
-                      </td>
-                      <td className="text-tight">
-                        <button
-                          className="btn btn--icon"
-                          type="button"
-                          onClick={() => removeGoal(g.id)}
-                          aria-label={`Delete ${g.name}`}
-                        >
-                          ×
-                        </button>
-                      </td>
-                    </tr>
+                    <Fragment key={g.id}>
+                      <tr>
+                        <td>
+                          <input
+                            className="input"
+                            value={g.name}
+                            onChange={(e) => updateGoal(g.id, { name: e.target.value })}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="select"
+                            value={g.type}
+                            onChange={(e) => updateGoal(g.id, { type: e.target.value as "savings" | "debt" })}
+                          >
+                            <option value="savings">Savings</option>
+                            <option value="debt">Debt</option>
+                          </select>
+                        </td>
+                        <td className="mono">
+                          <input
+                            className="input input--mono"
+                            type="text"
+                            inputMode="decimal"
+                            value={g.targetAmount || ""}
+                            onChange={(e) =>
+                              updateGoal(g.id, {
+                                targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0),
+                              })
+                            }
+                          />
+                        </td>
+                        <td className="mono">{moneyFmt(applied)}</td>
+                        <td>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {g.linkedBudgetCategoryIds.map((id) => {
+                              const cat = budgetCategories.find((c) => c.id === id);
+                              return cat ? <span key={id} className="badge" style={{ fontSize: 10 }}>{cat.name}</span> : null;
+                            })}
+                            {g.linkedExpenseIds.map((id) => {
+                              const exp = recurringExpenses.find((e) => e.id === id);
+                              return exp ? <span key={id} className="badge" style={{ fontSize: 10 }}>{exp.name}</span> : null;
+                            })}
+                            {g.linkedBudgetCategoryIds.length === 0 && g.linkedExpenseIds.length === 0 && (
+                              <span style={{ fontSize: 11, color: "var(--ink-4)", fontStyle: "italic" }}>None</span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ verticalAlign: "middle" }}>
+                          <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                            <button
+                              className="btn btn--ghost"
+                              type="button"
+                              title="Edit links &amp; adjustments"
+                              aria-label={`Edit ${g.name}`}
+                              onClick={() => {
+                                setExpandedGoalId(isExpanded ? null : g.id);
+                                setAdjAmount("");
+                                setAdjNote("");
+                              }}
+                              style={{ fontSize: 11, padding: "2px 7px", fontWeight: 600, color: isExpanded ? "var(--ink-1)" : undefined }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn--icon"
+                              type="button"
+                              onClick={() => removeGoal(g.id)}
+                              aria-label={`Delete ${g.name}`}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={6} style={{ background: "var(--surface-sunk)", padding: "14px 18px", borderTop: "1px dashed var(--border-soft)" }}>
+                            {/* Links section */}
+                            <p className="kicker" style={{ marginBottom: 8 }}>Links — {g.name}</p>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 20px", marginBottom: 16 }}>
+                              {budgetCategories.length === 0 && recurringExpenses.length === 0 && (
+                                <span style={{ fontSize: 12, color: "var(--ink-4)", fontStyle: "italic" }}>No budget categories or bills set up yet.</span>
+                              )}
+                              {budgetCategories.map((c) => {
+                                const checked = g.linkedBudgetCategoryIds.includes(c.id);
+                                return (
+                                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() =>
+                                        updateGoal(g.id, {
+                                          linkedBudgetCategoryIds: checked
+                                            ? g.linkedBudgetCategoryIds.filter((id) => id !== c.id)
+                                            : [...g.linkedBudgetCategoryIds, c.id],
+                                        })
+                                      }
+                                      style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
+                                    />
+                                    {c.name}
+                                  </label>
+                                );
+                              })}
+                              {recurringExpenses.map((e) => {
+                                const checked = g.linkedExpenseIds.includes(e.id);
+                                return (
+                                  <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() =>
+                                        updateGoal(g.id, {
+                                          linkedExpenseIds: checked
+                                            ? g.linkedExpenseIds.filter((id) => id !== e.id)
+                                            : [...g.linkedExpenseIds, e.id],
+                                        })
+                                      }
+                                      style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
+                                    />
+                                    {e.name}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            {/* Adjustments section */}
+                            <p className="kicker" style={{ marginBottom: 8 }}>Adjustments</p>
+                            {g.manualAdjustments.length > 0 ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 12 }}>
+                                {g.manualAdjustments.map((a) => (
+                                  <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+                                    <span style={{ fontFamily: "var(--font-numerals)", minWidth: 90, color: a.amount < 0 ? "var(--signal-red)" : "var(--ink-1)" }}>
+                                      {a.amount > 0 ? "+" : ""}{moneyFmt(a.amount)}
+                                    </span>
+                                    {a.note
+                                      ? <span style={{ color: "var(--ink-3)", fontStyle: "italic" }}>{a.note}</span>
+                                      : <span style={{ color: "var(--ink-4)", fontStyle: "italic" }}>—</span>
+                                    }
+                                    <button
+                                      className="btn btn--icon"
+                                      type="button"
+                                      style={{ marginLeft: "auto" }}
+                                      onClick={() => removeManualAdjustment(g.id, a.id)}
+                                      aria-label="Remove adjustment"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p style={{ color: "var(--ink-4)", fontStyle: "italic", fontSize: 13, marginBottom: 10 }}>No manual adjustments yet.</p>
+                            )}
+                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                              <div className="field" style={{ margin: 0 }}>
+                                <label className="field__label">Amount (negative to subtract)</label>
+                                <input
+                                  className="input input--mono"
+                                  type="text"
+                                  inputMode="decimal"
+                                  placeholder="e.g. −500 or 100"
+                                  value={adjAmount}
+                                  style={{ width: 150 }}
+                                  onChange={(e) => setAdjAmount(e.target.value)}
+                                  onKeyDown={(e) => e.key === "Enter" && addManualAdjustment(g.id)}
+                                />
+                              </div>
+                              <div className="field" style={{ margin: 0 }}>
+                                <label className="field__label">Note (optional)</label>
+                                <input
+                                  className="input"
+                                  type="text"
+                                  placeholder="e.g. Emergency withdrawal"
+                                  value={adjNote}
+                                  style={{ width: 220 }}
+                                  onChange={(e) => setAdjNote(e.target.value)}
+                                  onKeyDown={(e) => e.key === "Enter" && addManualAdjustment(g.id)}
+                                />
+                              </div>
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={() => addManualAdjustment(g.id)}
+                                disabled={!adjAmount.trim() || isNaN(parseAdjAmount(adjAmount)) || parseAdjAmount(adjAmount) === 0}
+                              >
+                                Apply
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
             </table>
           </div>
-
-          {/* Add form */}
-          <div className="inline-form inline-form--4col">
-            <div className="field">
-              <label className="field__label">Goal name</label>
-              <input
-                className="input"
-                placeholder="e.g. Emergency fund"
-                value={draft.name}
-                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                onKeyDown={(e) => e.key === "Enter" && addGoal()}
-              />
-            </div>
-            <div className="field">
-              <label className="field__label">Type</label>
-              <select
-                className="select"
-                value={draft.type}
-                onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value as "savings" | "debt" }))}
-              >
-                <option value="savings">Savings</option>
-                <option value="debt">Debt</option>
-              </select>
-            </div>
-            <div className="field">
-              <label className="field__label">Target amount</label>
-              <input
-                className="input input--mono"
-                type="text"
-                inputMode="decimal"
-                placeholder="0"
-                value={draft.targetAmount || ""}
-                onChange={(e) =>
-                  setDraft((d) => ({
-                    ...d,
-                    targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0),
-                  }))
-                }
-                onKeyDown={(e) => e.key === "Enter" && addGoal()}
-              />
-            </div>
-            <div className="field">
-              <label className="field__label">Link to</label>
-              <select
-                className="select"
-                value={draft.link}
-                onChange={(e) => setDraft((d) => ({ ...d, link: e.target.value as LinkValue }))}
-              >
-                <option value="">None</option>
-                {budgetCategories.length > 0 && (
-                  <optgroup label="Budget categories">
-                    {budgetCategories.map((c) => (
-                      <option key={c.id} value={`cat:${c.id}`}>{c.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {recurringExpenses.length > 0 && (
-                  <optgroup label="Recurring bills">
-                    {recurringExpenses.map((e) => (
-                      <option key={e.id} value={`exp:${e.id}`}>{e.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            </div>
-            <button
-              className="btn"
-              type="button"
-              onClick={addGoal}
-              disabled={!draft.name.trim() || draft.targetAmount <= 0}
-            >
-              Add
-            </button>
-          </div>
+          <AddGoalForm draft={draft} setDraft={setDraft} onAdd={addGoal} budgetCategories={budgetCategories} recurringExpenses={recurringExpenses} />
         </div>
       )}
 
@@ -405,78 +607,7 @@ export default function GoalsPage() {
             <p className="kicker">New goal</p>
             <h2 className="section-title">Add your first goal</h2>
           </div>
-          <div className="inline-form inline-form--4col">
-            <div className="field">
-              <label className="field__label">Goal name</label>
-              <input
-                className="input"
-                placeholder="e.g. Emergency fund"
-                value={draft.name}
-                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                onKeyDown={(e) => e.key === "Enter" && addGoal()}
-              />
-            </div>
-            <div className="field">
-              <label className="field__label">Type</label>
-              <select
-                className="select"
-                value={draft.type}
-                onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value as "savings" | "debt" }))}
-              >
-                <option value="savings">Savings</option>
-                <option value="debt">Debt</option>
-              </select>
-            </div>
-            <div className="field">
-              <label className="field__label">Target amount</label>
-              <input
-                className="input input--mono"
-                type="text"
-                inputMode="decimal"
-                placeholder="0"
-                value={draft.targetAmount || ""}
-                onChange={(e) =>
-                  setDraft((d) => ({
-                    ...d,
-                    targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0),
-                  }))
-                }
-                onKeyDown={(e) => e.key === "Enter" && addGoal()}
-              />
-            </div>
-            <div className="field">
-              <label className="field__label">Link to</label>
-              <select
-                className="select"
-                value={draft.link}
-                onChange={(e) => setDraft((d) => ({ ...d, link: e.target.value as LinkValue }))}
-              >
-                <option value="">None</option>
-                {budgetCategories.length > 0 && (
-                  <optgroup label="Budget categories">
-                    {budgetCategories.map((c) => (
-                      <option key={c.id} value={`cat:${c.id}`}>{c.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {recurringExpenses.length > 0 && (
-                  <optgroup label="Recurring bills">
-                    {recurringExpenses.map((e) => (
-                      <option key={e.id} value={`exp:${e.id}`}>{e.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            </div>
-            <button
-              className="btn"
-              type="button"
-              onClick={addGoal}
-              disabled={!draft.name.trim() || draft.targetAmount <= 0}
-            >
-              Add
-            </button>
-          </div>
+          <AddGoalForm draft={draft} setDraft={setDraft} onAdd={addGoal} budgetCategories={budgetCategories} recurringExpenses={recurringExpenses} />
         </div>
       )}
     </section>

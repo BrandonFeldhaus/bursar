@@ -1210,6 +1210,8 @@ select {
   background: transparent;
   color: var(--ink-3);
   box-shadow: none;
+  font-size: 20px;
+  line-height: 1;
 }
 .btn--icon:hover { background: rgba(43,42,38,0.06); color: var(--ink-1); }
 .btn--lg { height: 44px; padding: 0 24px; font-size: 12px; }
@@ -1400,6 +1402,8 @@ select {
   width: 28px;
   height: 28px;
   min-width: 28px;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .ledger-table .input:focus,
@@ -1437,7 +1441,7 @@ select {
   display: inline-block;
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
+  /* overflow: hidden; */
   text-overflow: ellipsis;
 }
 
@@ -2102,8 +2106,36 @@ select {
 }
 
 /* 4-column variant for period card inline stats */
-.period-card__inline-stats--4 {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.period-card__goals-tab {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 12px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-md);
+  background: rgba(43,42,38,0.04);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.period-card__goals-tab:hover { background: rgba(43,42,38,0.08); }
+.period-card__goals-tab--active {
+  background: rgba(43,42,38,0.10) !important;
+  border-color: var(--ink-1);
+}
+.period-card__goals-tab:focus-visible {
+  outline: 2px solid var(--ink-1);
+  outline-offset: 2px;
+}
+.period-card__goals-tab__count {
+  font-family: var(--font-stamp);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
 /* =========================================================

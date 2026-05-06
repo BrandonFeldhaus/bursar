@@ -36,13 +36,23 @@ export type BudgetCategory = {
   value: number;
 };
 
+export type LockedMonth = {
+  monthKey: string;
+  lockedAt: string;
+  incomes: Income[];
+  recurringExpenses: RecurringExpense[];
+  budgetCategories: BudgetCategory[];
+  goals: Goal[];
+};
+
 export type Goal = {
   id: string;
   name: string;
   type: "savings" | "debt";
   targetAmount: number;
-  linkedBudgetCategoryId?: string;
-  linkedExpenseId?: string;
+  linkedBudgetCategoryIds: string[];
+  linkedExpenseIds: string[];
+  manualAdjustments: { id: string; amount: number; note?: string }[];
   appliedPeriods: { periodId: string; amount: number }[];
 };
 
@@ -79,6 +89,7 @@ export type BudgetState = {
   paycheckAmount: number;
   budgetCategories: BudgetCategory[];
   goals: Goal[];
+  lockedMonths: LockedMonth[];
 };
 
 export function newId() {
@@ -104,6 +115,7 @@ export function defaultBudget(overrides?: Partial<BudgetState>): BudgetState {
     paycheckAmount: 0,
     budgetCategories: [],
     goals: [],
+    lockedMonths: [],
   };
 
   return {
@@ -121,6 +133,7 @@ export function defaultBudget(overrides?: Partial<BudgetState>): BudgetState {
     incomes: Array.isArray(overrides?.incomes) ? overrides.incomes : base.incomes,
     budgetCategories: Array.isArray(overrides?.budgetCategories) ? overrides.budgetCategories : base.budgetCategories,
     goals: Array.isArray(overrides?.goals) ? overrides.goals : base.goals,
+    lockedMonths: Array.isArray(overrides?.lockedMonths) ? overrides.lockedMonths : base.lockedMonths,
   };
 }
 
@@ -177,23 +190,56 @@ function normalizeBudgetCategories(parsed: any): BudgetCategory[] {
 
 function normalizeGoals(raw: any[]): Goal[] {
   return raw
-    .map((g: any) => ({
-      id: typeof g?.id === "string" ? g.id : newId(),
-      name: typeof g?.name === "string" ? g.name : "",
-      type: g?.type === "debt" ? ("debt" as const) : ("savings" as const),
-      targetAmount: Math.max(0, Number(g?.targetAmount ?? 0) || 0),
-      linkedBudgetCategoryId: typeof g?.linkedBudgetCategoryId === "string" ? g.linkedBudgetCategoryId : undefined,
-      linkedExpenseId: typeof g?.linkedExpenseId === "string" ? g.linkedExpenseId : undefined,
-      appliedPeriods: Array.isArray(g?.appliedPeriods)
-        ? g.appliedPeriods
-            .map((p: any) => ({
-              periodId: typeof p?.periodId === "string" ? p.periodId : "",
-              amount: Math.max(0, Number(p?.amount ?? 0) || 0),
+    .map((g: any) => {
+      // Migrate from old single-link fields to arrays
+      const linkedBudgetCategoryIds: string[] = Array.isArray(g?.linkedBudgetCategoryIds)
+        ? g.linkedBudgetCategoryIds.filter((id: any) => typeof id === "string" && id.length > 0)
+        : typeof g?.linkedBudgetCategoryId === "string" && g.linkedBudgetCategoryId
+          ? [g.linkedBudgetCategoryId]
+          : [];
+      const linkedExpenseIds: string[] = Array.isArray(g?.linkedExpenseIds)
+        ? g.linkedExpenseIds.filter((id: any) => typeof id === "string" && id.length > 0)
+        : typeof g?.linkedExpenseId === "string" && g.linkedExpenseId
+          ? [g.linkedExpenseId]
+          : [];
+      return {
+        id: typeof g?.id === "string" ? g.id : newId(),
+        name: typeof g?.name === "string" ? g.name : "",
+        type: g?.type === "debt" ? ("debt" as const) : ("savings" as const),
+        targetAmount: Math.max(0, Number(g?.targetAmount ?? 0) || 0),
+        linkedBudgetCategoryIds,
+        linkedExpenseIds,
+        manualAdjustments: Array.isArray(g?.manualAdjustments)
+          ? g.manualAdjustments.map((a: any) => ({
+              id: typeof a?.id === "string" ? a.id : newId(),
+              amount: Number(a?.amount ?? 0) || 0,
+              note: typeof a?.note === "string" && a.note.trim() ? a.note.trim() : undefined,
             }))
-            .filter((p: { periodId: string; amount: number }) => p.periodId.length > 0)
-        : [],
-    }))
+          : [],
+        appliedPeriods: Array.isArray(g?.appliedPeriods)
+          ? g.appliedPeriods
+              .map((p: any) => ({
+                periodId: typeof p?.periodId === "string" ? p.periodId : "",
+                amount: Math.max(0, Number(p?.amount ?? 0) || 0),
+              }))
+              .filter((p: { periodId: string; amount: number }) => p.periodId.length > 0)
+          : [],
+      };
+    })
     .filter((g: Goal) => g.name.trim().length > 0);
+}
+
+function normalizeLockedMonths(raw: any[]): LockedMonth[] {
+  return raw
+    .map((lm: any) => ({
+      monthKey: typeof lm?.monthKey === "string" ? lm.monthKey : "",
+      lockedAt: typeof lm?.lockedAt === "string" ? lm.lockedAt : new Date().toISOString(),
+      incomes: Array.isArray(lm?.incomes) ? lm.incomes : [],
+      recurringExpenses: normalizeRecurringExpenses(Array.isArray(lm?.recurringExpenses) ? lm.recurringExpenses : []),
+      budgetCategories: normalizeBudgetCategories({ budgetCategories: lm?.budgetCategories }),
+      goals: normalizeGoals(Array.isArray(lm?.goals) ? lm.goals : []),
+    }))
+    .filter((lm: LockedMonth) => lm.monthKey.length > 0);
 }
 
 function normalizeParsed(parsed: any): BudgetState {
@@ -208,6 +254,7 @@ function normalizeParsed(parsed: any): BudgetState {
   const incomes: Income[] = Array.isArray(parsed?.incomes) ? parsed.incomes : [];
   const budgetCategories = normalizeBudgetCategories(parsed);
   const goals = normalizeGoals(Array.isArray(parsed?.goals) ? parsed.goals : []);
+  const lockedMonths = normalizeLockedMonths(Array.isArray(parsed?.lockedMonths) ? parsed.lockedMonths : []);
 
   return defaultBudget({
     settings: { payCycleType, paycheckAmount },
@@ -224,6 +271,7 @@ function normalizeParsed(parsed: any): BudgetState {
     paycheckAmount,
     budgetCategories,
     goals,
+    lockedMonths,
   });
 }
 
