@@ -7,7 +7,7 @@ import { isBudgetOverdrawn } from "../lib/allocations";
 import { monthlyIncomeOf } from "../lib/month";
 import { moneyFmt } from "../lib/currency";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
-import { UndoToast } from "../components/UndoToast";
+import { UndoToast, type UndoEntry } from "../components/UndoToast";
 
 function AllocationRing({
   segments,
@@ -77,7 +77,7 @@ export default function BudgetPage() {
   const [draft, setDraft] = useState<Omit<BudgetCategory, "id">>({ name: "", mode: "percent", value: 0 });
   const [attempted, setAttempted] = useState(false);
   const savedIndicator = useSavedIndicator();
-  const [undoEntry, setUndoEntry] = useState<{ id: string; category: BudgetCategory; index: number; timeout: NodeJS.Timeout } | null>(null);
+  const [undo, setUndo] = useState<UndoEntry | null>(null);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -98,26 +98,23 @@ export default function BudgetPage() {
     setState((s) => {
       if (!s) return s;
       const index = s.budgetCategories.findIndex((c) => c.id === id);
-      const cat = s.budgetCategories[index];
-      if (cat !== undefined) {
-        const timeout = setTimeout(() => setUndoEntry(null), 5000);
-        setUndoEntry({ id, category: cat, index, timeout });
-      }
+      const target = s.budgetCategories[index];
+      if (!target) return s;
+      setUndo({
+        id,
+        message: `Deleted ${target.name || "category"}`,
+        onUndo: () => {
+          setState((cur) => {
+            if (!cur) return cur;
+            const restored = [...cur.budgetCategories];
+            restored.splice(index, 0, target);
+            return { ...cur, budgetCategories: restored };
+          });
+          savedIndicator.flash();
+        },
+      });
       return { ...s, budgetCategories: s.budgetCategories.filter((c) => c.id !== id) };
     });
-  }
-
-  function handleUndoDelete() {
-    if (!undoEntry) return;
-    clearTimeout(undoEntry.timeout);
-    setState((s) => {
-      if (!s) return s;
-      const newCats = [...s.budgetCategories];
-      newCats.splice(undoEntry.index, 0, undoEntry.category);
-      return { ...s, budgetCategories: newCats };
-    });
-    setUndoEntry(null);
-    savedIndicator.flash();
   }
 
   function add() {
@@ -347,13 +344,7 @@ export default function BudgetPage() {
 
       {/* SavedIndicator and UndoToast */}
       <SavedIndicator visible={savedIndicator.visible} />
-      {undoEntry && (
-        <UndoToast
-          entry={{ id: undoEntry.id, message: "Category deleted", onUndo: handleUndoDelete, onCommit: () => setUndoEntry(null) }}
-          onDismiss={() => setUndoEntry(null)}
-          durationMs={5000}
-        />
-      )}
+      <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </section>
   );
 }

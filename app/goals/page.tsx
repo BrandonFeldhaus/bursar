@@ -5,7 +5,7 @@ import { loadState, newId, saveState, type BudgetState, type Goal } from "../lib
 import { useHydrated } from "../lib/useHydrated";
 import { moneyFmt } from "../lib/currency";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
-import { UndoToast } from "../components/UndoToast";
+import { UndoToast, type UndoEntry } from "../components/UndoToast";
 
 function GoalProgressBar({ pct, type }: { pct: number; type: "savings" | "debt" }) {
   const clamped = Math.min(100, Math.max(0, pct));
@@ -170,7 +170,7 @@ export default function GoalsPage() {
   const [adjNote, setAdjNote] = useState("");
   const [attempted, setAttempted] = useState(false);
   const savedIndicator = useSavedIndicator();
-  const [undoEntry, setUndoEntry] = useState<{ id: string; goal: Goal; index: number; timeout: NodeJS.Timeout } | null>(null);
+  const [undo, setUndo] = useState<UndoEntry | null>(null);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -216,27 +216,24 @@ export default function GoalsPage() {
     setState((s) => {
       if (!s) return s;
       const index = s.goals.findIndex((g) => g.id === id);
-      const goal = s.goals[index];
-      if (goal !== undefined) {
-        const timeout = setTimeout(() => setUndoEntry(null), 5000);
-        setUndoEntry({ id, goal, index, timeout });
-      }
+      const target = s.goals[index];
+      if (!target) return s;
+      setUndo({
+        id,
+        message: `Deleted ${target.name || "goal"}`,
+        onUndo: () => {
+          setState((cur) => {
+            if (!cur) return cur;
+            const restored = [...cur.goals];
+            restored.splice(index, 0, target);
+            return { ...cur, goals: restored };
+          });
+          savedIndicator.flash();
+        },
+      });
       return { ...s, goals: s.goals.filter((g) => g.id !== id) };
     });
     if (expandedGoalId === id) setExpandedGoalId(null);
-  }
-
-  function handleUndoDelete() {
-    if (!undoEntry) return;
-    clearTimeout(undoEntry.timeout);
-    setState((s) => {
-      if (!s) return s;
-      const newGoals = [...s.goals];
-      newGoals.splice(undoEntry.index, 0, undoEntry.goal);
-      return { ...s, goals: newGoals };
-    });
-    setUndoEntry(null);
-    savedIndicator.flash();
   }
 
   function addManualAdjustment(goalId: string) {
@@ -423,6 +420,7 @@ export default function GoalsPage() {
               <tbody>
                 {goals.map((g) => {
                   const applied = goalTotalApplied(g);
+                  const pct = g.targetAmount > 0 ? (applied / g.targetAmount) * 100 : 0;
                   const isExpanded = expandedGoalId === g.id;
                   return (
                     <Fragment key={g.id}>
@@ -433,6 +431,13 @@ export default function GoalsPage() {
                             value={g.name}
                             onChange={(e) => updateGoal(g.id, { name: e.target.value })}
                           />
+                          <div className="goal-row-progress" aria-hidden="true">
+                            <GoalProgressBar pct={pct} type={g.type} />
+                            <div className="goal-row-progress__meta">
+                              <span>{moneyFmt(applied)} / {moneyFmt(g.targetAmount)}</span>
+                              <span className="goal-row-progress__pct">{pct.toFixed(0)}%</span>
+                            </div>
+                          </div>
                         </td>
                         <td data-label="Type">
                           <select
@@ -579,28 +584,29 @@ export default function GoalsPage() {
                             ) : (
                               <p style={{ color: "var(--ink-4)", fontStyle: "italic", fontSize: 13, marginBottom: 10 }}>No manual adjustments yet.</p>
                             )}
-                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-                              <div className="field" style={{ margin: 0 }}>
-                                <label className="field__label">Amount (negative to subtract)</label>
+                            <div
+                              className="inline-form inline-form--2col"
+                              style={{ padding: 0, background: "transparent", borderRadius: 0 }}
+                            >
+                              <div className="field">
+                                <label className="field__label">Amount</label>
                                 <input
                                   className="input input--mono"
                                   type="text"
                                   inputMode="decimal"
                                   placeholder="e.g. −500 or 100"
                                   value={adjAmount}
-                                  style={{ width: 150 }}
                                   onChange={(e) => setAdjAmount(e.target.value)}
                                   onKeyDown={(e) => e.key === "Enter" && addManualAdjustment(g.id)}
                                 />
                               </div>
-                              <div className="field" style={{ margin: 0 }}>
+                              <div className="field">
                                 <label className="field__label">Note (optional)</label>
                                 <input
                                   className="input"
                                   type="text"
                                   placeholder="e.g. Emergency withdrawal"
                                   value={adjNote}
-                                  style={{ width: 220 }}
                                   onChange={(e) => setAdjNote(e.target.value)}
                                   onKeyDown={(e) => e.key === "Enter" && addManualAdjustment(g.id)}
                                 />
@@ -640,13 +646,7 @@ export default function GoalsPage() {
 
       {/* SavedIndicator and UndoToast */}
       <SavedIndicator visible={savedIndicator.visible} />
-      {undoEntry && (
-        <UndoToast
-          entry={{ id: undoEntry.id, message: "Goal deleted", onUndo: handleUndoDelete, onCommit: () => setUndoEntry(null) }}
-          onDismiss={() => setUndoEntry(null)}
-          durationMs={5000}
-        />
-      )}
+      <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </section>
   );
 }

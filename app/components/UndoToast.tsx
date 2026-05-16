@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useRef } from "react";
 
 export type UndoEntry = {
@@ -12,7 +11,7 @@ export type UndoEntry = {
 export function UndoToast({
   entry,
   onDismiss,
-  durationMs = 5000,
+  durationMs = 15000,
 }: {
   entry: UndoEntry | null;
   onDismiss: () => void;
@@ -20,24 +19,29 @@ export function UndoToast({
 }) {
   const committedRef = useRef(false);
 
+  // Keep latest callbacks in refs so the effect doesn't re-run when they change.
+  const entryRef = useRef(entry);
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => {
+    entryRef.current = entry;
+    onDismissRef.current = onDismiss;
+  });
+
+  // Only re-run the timer when the entry's identity actually changes.
   useEffect(() => {
     if (!entry) return;
     committedRef.current = false;
+
     const t = setTimeout(() => {
       if (!committedRef.current) {
-        entry.onCommit?.();
         committedRef.current = true;
-        onDismiss();
+        entryRef.current?.onCommit?.();
+        onDismissRef.current();
       }
     }, durationMs);
-    return () => {
-      clearTimeout(t);
-      if (!committedRef.current) {
-        entry.onCommit?.();
-        committedRef.current = true;
-      }
-    };
-  }, [entry, durationMs, onDismiss]);
+
+    return () => clearTimeout(t);
+  }, [entry?.id, durationMs]);
 
   if (!entry) return null;
 
@@ -49,6 +53,7 @@ export function UndoToast({
           type="button"
           className="undo-toast__btn"
           onClick={() => {
+            if (committedRef.current) return;
             committedRef.current = true;
             entry.onUndo();
             onDismiss();
