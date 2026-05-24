@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Info } from "lucide-react";
 import { loadState, newId, saveState, type BudgetState, type Income, type PayCycle } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
 import { todayISO, monthlyIncomeOf } from "../lib/month";
@@ -138,7 +139,7 @@ export default function IncomePage() {
         <h1 className="page-head__title">Income ledger</h1>
         <p className="page-head__lead">Track all your income sources. Each one's paycheck dates are calculated independently and feed into your period breakdown.</p>
         <details className="cycle-info">
-          <summary>About pay cycle types</summary>
+          <summary><Info size={14} aria-hidden="true" />About pay cycle types</summary>
           <dl className="cycle-info__list">
             <div>
               <dt>Weekly</dt>

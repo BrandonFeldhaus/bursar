@@ -1408,6 +1408,9 @@ select {
 .ledger-table td.text-right,
 .ledger-table th.text-right { text-align: right; }
 
+.ledger-table td.text-right .input,
+.ledger-table td.text-right .select { text-align: right; }
+
 .ledger-table td.text-tight,
 .ledger-table th.text-tight { width: 1px; padding-left: 8px; }
 
@@ -1699,20 +1702,9 @@ select {
 
 .cycle-info > summary::-webkit-details-marker { display: none; }
 
-.cycle-info > summary::before {
-  content: "i";
-  display: inline-grid;
-  place-items: center;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--ink-1);
-  color: var(--paper-1);
-  font-family: var(--font-numerals);
-  font-size: 9px;
-  font-style: italic;
-  font-weight: 600;
-  letter-spacing: 0;
+.cycle-info > summary > svg {
+  flex: none;
+  stroke-width: 2;
 }
 
 .cycle-info > summary:hover {
@@ -1723,11 +1715,6 @@ select {
 .cycle-info[open] > summary {
   background: var(--ink-1);
   color: var(--paper-1);
-}
-
-.cycle-info[open] > summary::before {
-  background: var(--paper-1);
-  color: var(--ink-1);
 }
 
 .cycle-info__list {

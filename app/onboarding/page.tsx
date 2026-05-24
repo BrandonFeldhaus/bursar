@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Info } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { defaultBudget, loadBudget, newId, saveBudget, type BudgetCategory, type BudgetState, type Goal, type PayCycle, type RecurringExpense } from "../lib/budgetStorage";
 import { useHydrated } from "../lib/useHydrated";
@@ -259,7 +260,7 @@ export default function OnboardingPage() {
                   ))}
                 </div>
                 <details className="cycle-info">
-                  <summary>About pay cycle types</summary>
+                  <summary><Info size={14} aria-hidden="true" />About pay cycle types</summary>
                   <dl className="cycle-info__list">
                     <div>
                       <dt>Weekly</dt>

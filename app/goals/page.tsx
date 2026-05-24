@@ -422,7 +422,7 @@ export default function GoalsPage() {
                 <tr>
                   <th style={{ width: "24%" }}>Goal</th>
                   <th style={{ width: "9%" }}>Type</th>
-                  <th style={{ width: "11%" }}>Target</th>
+                  <th className="text-right" style={{ width: "11%" }}>Target</th>
                   <th style={{ width: "10%" }}>Applied</th>
                   <th style={{ width: "38%" }}>Linked to</th>
                   <th className="text-tight" style={{ width: "8%" }} />
