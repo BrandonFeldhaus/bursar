@@ -36,10 +36,6 @@ npm test         # Mocha test suite
 npx tsc --noEmit # type-check only
 ```
 
-## Deploying To GitHub Pages
-
-This project uses Next.js static export and can be deployed to GitHub Pages through GitHub Actions. On GitHub, set **Settings > Pages > Source** to **GitHub Actions**, then push to `main`.
-
 ## Analytics
 
 Bursar uses [Umami](https://umami.is/) for privacy-friendly, cookieless analytics on the hosted version. Umami collects aggregate page-view and referrer data only — no personal information, no cross-site tracking, and no cookies. **Your budget data is never sent anywhere**; it always stays in your browser's `localStorage`.
