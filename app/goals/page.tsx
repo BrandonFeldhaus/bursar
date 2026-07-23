@@ -1,12 +1,20 @@
 "use client";
 
 import { type Dispatch, type SetStateAction, Fragment, useEffect, useMemo, useState } from "react";
+import { IconPlus, IconX } from "@tabler/icons-react";
 import { loadState, newId, saveState, type BudgetState, type Goal } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
+import { useIsMobile } from "../lib/useIsMobile";
 import { moneyFmt } from "../lib/currency";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
+import { BottomSheet } from "../components/BottomSheet";
+import { AddGoalForm, emptyGoalDraft, type DraftGoal } from "../components/AddGoalForm";
 import { jumpToAddForm } from "../lib/jumpToAddForm";
+import { toISODate } from "../lib/month";
+import { formatAdjustmentDate, sortAdjustmentsForDisplay } from "../lib/goalAdjustments";
+
+const RECENT_ADJ_COUNT = 3;
 
 function GoalProgressBar({ pct, type }: { pct: number; type: "savings" | "debt" }) {
   const clamped = Math.min(100, Math.max(0, pct));
@@ -26,139 +34,205 @@ function goalTotalApplied(g: Goal): number {
 }
 
 function parseAdjAmount(raw: string): number {
-  return parseFloat(raw.replace(/−/g, "-").replace(/[^0-9.\-]/g, ""));
+  return parseFloat(raw.replace(/[^0-9.]/g, ""));
 }
 
-type DraftGoal = {
-  name: string;
-  type: "savings" | "debt";
-  targetAmount: number;
-  linkedBudgetCategoryIds: string[];
-  linkedExpenseIds: string[];
-};
+type AdjSign = 1 | -1;
 
-function AddGoalForm({
-  draft,
-  setDraft,
-  onAdd,
+function GoalEditor({
+  goal,
   budgetCategories,
   recurringExpenses,
-  attempted,
-  formId,
+  onUpdate,
+  adjAmount,
+  setAdjAmount,
+  adjSign,
+  setAdjSign,
+  adjNote,
+  setAdjNote,
+  onAddAdjustment,
+  onRemoveAdjustment,
+  showAllAdj,
+  onToggleShowAllAdj,
+  inSheet,
 }: {
-  draft: DraftGoal;
-  setDraft: Dispatch<SetStateAction<DraftGoal>>;
-  onAdd: () => void;
+  goal: Goal;
   budgetCategories: { id: string; name: string }[];
   recurringExpenses: { id: string; name: string }[];
-  attempted?: boolean;
-  formId?: string;
+  onUpdate: (patch: Partial<Goal>) => void;
+  adjAmount: string;
+  setAdjAmount: Dispatch<SetStateAction<string>>;
+  adjSign: AdjSign;
+  setAdjSign: Dispatch<SetStateAction<AdjSign>>;
+  adjNote: string;
+  setAdjNote: Dispatch<SetStateAction<string>>;
+  onAddAdjustment: () => void;
+  onRemoveAdjustment: (adjId: string) => void;
+  showAllAdj: boolean;
+  onToggleShowAllAdj: () => void;
+  inSheet?: boolean;
 }) {
-  const hasLinkable = budgetCategories.length > 0 || recurringExpenses.length > 0;
-  const sunkStyle = { background: "var(--surface-sunk)" } as const;
+  const sortedAdj = sortAdjustmentsForDisplay(goal.manualAdjustments);
+  const visibleAdj = showAllAdj ? sortedAdj : sortedAdj.slice(0, RECENT_ADJ_COUNT);
   return (
     <>
-      <div id={formId} className="inline-form inline-form--3col" style={{ ...sunkStyle, borderRadius: 0, paddingBottom: 12 }}>
-        <div className="field">
-          <label className="field__label">Goal name</label>
-          <input
-            className="input"
-            placeholder="e.g. Emergency fund"
-            value={draft.name}
-            onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-            onKeyDown={(e) => e.key === "Enter" && onAdd()}
-          />
-          {attempted && !draft.name.trim() && <p className="field__error">Required</p>}
-        </div>
-        <div className="field">
-          <label className="field__label">Type</label>
-          <select
-            className="select"
-            value={draft.type}
-            onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value as "savings" | "debt" }))}
-          >
-            <option value="savings">Savings</option>
-            <option value="debt">Debt</option>
-          </select>
-        </div>
-        <div className="field">
-          <label className="field__label">Target amount</label>
-          <input
-            className="input input--mono"
-            type="text"
-            inputMode="decimal"
-            placeholder="0"
-            value={draft.targetAmount || ""}
-            onChange={(e) =>
-              setDraft((d) => ({
-                ...d,
-                targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0),
-              }))
-            }
-            onKeyDown={(e) => e.key === "Enter" && onAdd()}
-            pattern="[0-9.]*"
-            style={{ textAlign: "left" }}
-          />
-          {attempted && draft.targetAmount <= 0 && <p className="field__error">Must be more than 0</p>}
-        </div>
+      {/* Links section */}
+      <p className="kicker" style={{ marginBottom: 8 }}>{inSheet ? "Links" : `Links — ${goal.name}`}</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 20px", marginBottom: 16 }}>
+        {budgetCategories.length === 0 && recurringExpenses.length === 0 && (
+          <span style={{ fontSize: 12, color: "var(--ink-4)", fontStyle: "italic" }}>No budget categories or bills set up yet.</span>
+        )}
+        {budgetCategories.map((c) => {
+          const checked = goal.linkedBudgetCategoryIds.includes(c.id);
+          return (
+            <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() =>
+                  onUpdate({
+                    linkedBudgetCategoryIds: checked
+                      ? goal.linkedBudgetCategoryIds.filter((id) => id !== c.id)
+                      : [...goal.linkedBudgetCategoryIds, c.id],
+                  })
+                }
+                style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
+              />
+              {c.name}
+            </label>
+          );
+        })}
+        {recurringExpenses.map((e) => {
+          const checked = goal.linkedExpenseIds.includes(e.id);
+          return (
+            <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() =>
+                  onUpdate({
+                    linkedExpenseIds: checked
+                      ? goal.linkedExpenseIds.filter((id) => id !== e.id)
+                      : [...goal.linkedExpenseIds, e.id],
+                  })
+                }
+                style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
+              />
+              {e.name}
+            </label>
+          );
+        })}
       </div>
-      {hasLinkable && (
-        <div style={{ ...sunkStyle, padding: "0 24px 12px" }}>
-          <p className="field__label" style={{ marginBottom: 6 }}>Link to</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 20px" }}>
-            {budgetCategories.map((c) => {
-              const checked = draft.linkedBudgetCategoryIds.includes(c.id);
-              return (
-                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() =>
-                      setDraft((d) => ({
-                        ...d,
-                        linkedBudgetCategoryIds: checked
-                          ? d.linkedBudgetCategoryIds.filter((id) => id !== c.id)
-                          : [...d.linkedBudgetCategoryIds, c.id],
-                      }))
-                    }
-                    style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
-                  />
-                  {c.name}
-                </label>
-              );
-            })}
-            {recurringExpenses.map((e) => {
-              const checked = draft.linkedExpenseIds.includes(e.id);
-              return (
-                <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() =>
-                      setDraft((d) => ({
-                        ...d,
-                        linkedExpenseIds: checked
-                          ? d.linkedExpenseIds.filter((id) => id !== e.id)
-                          : [...d.linkedExpenseIds, e.id],
-                      }))
-                    }
-                    style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
-                  />
-                  {e.name}
-                </label>
-              );
-            })}
+      {/* Adjustments section */}
+      <p className="kicker" style={{ marginBottom: 8 }}>Adjustments</p>
+      {sortedAdj.length > 0 ? (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: sortedAdj.length > RECENT_ADJ_COUNT ? 6 : 12, ...(showAllAdj ? { maxHeight: 180, overflowY: "auto" } : {}) }}>
+            {visibleAdj.map((a) => (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+                <span style={{ color: "var(--ink-4)", fontSize: 12, minWidth: 52, flexShrink: 0 }}>
+                  {a.date ? formatAdjustmentDate(a.date) : "—"}
+                </span>
+                <span style={{ fontFamily: "var(--font-numerals)", minWidth: 90, color: a.amount < 0 ? "var(--signal-red)" : "var(--ink-1)" }}>
+                  {a.amount > 0 ? "+" : ""}{moneyFmt(a.amount)}
+                </span>
+                {a.note
+                  ? <span style={{ color: "var(--ink-3)", fontStyle: "italic" }}>{a.note}</span>
+                  : <span style={{ color: "var(--ink-4)", fontStyle: "italic" }}>—</span>
+                }
+                <button
+                  className="btn btn--icon"
+                  type="button"
+                  style={{ marginLeft: "auto", flexShrink: 0 }}
+                  onClick={() => onRemoveAdjustment(a.id)}
+                  aria-label="Remove adjustment"
+                >
+                  <IconX size={16} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+          </div>
+          {sortedAdj.length > RECENT_ADJ_COUNT && (
+            <button
+              className="btn btn--ghost"
+              type="button"
+              onClick={onToggleShowAllAdj}
+              style={{ fontSize: 12, padding: "2px 8px", marginBottom: 12 }}
+            >
+              {showAllAdj ? "Show recent" : `Show all (${sortedAdj.length})`}
+            </button>
+          )}
+        </>
+      ) : (
+        <p style={{ color: "var(--ink-4)", fontStyle: "italic", fontSize: 13, marginBottom: 10 }}>No manual adjustments yet.</p>
+      )}
+      <div
+        className="inline-form inline-form--2col"
+        style={{ padding: 0, background: "transparent", borderRadius: 0 }}
+      >
+        <div className="field">
+          <label className="field__label">Amount</label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div className="segment" role="radiogroup" aria-label="Add or subtract" style={{ width: "auto", flex: "0 0 auto" }}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={adjSign === 1}
+                aria-label="Add to goal"
+                className={`segment__btn${adjSign === 1 ? " segment__btn--active" : ""}`}
+                style={{ fontSize: 15, minWidth: 40, height: 32 }}
+                onClick={() => setAdjSign(1)}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={adjSign === -1}
+                aria-label="Subtract from goal"
+                className={`segment__btn${adjSign === -1 ? " segment__btn--active" : ""}`}
+                style={{ fontSize: 15, minWidth: 40, height: 32 }}
+                onClick={() => setAdjSign(-1)}
+              >
+                −
+              </button>
+            </div>
+            <input
+              className="input input--mono"
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9.]*"
+              placeholder="e.g. 500"
+              value={adjAmount}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (/[-−]/.test(raw)) setAdjSign(-1);
+                else if (/\+/.test(raw)) setAdjSign(1);
+                setAdjAmount(raw.replace(/[^0-9.]/g, ""));
+              }}
+              onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
+              style={{ flex: 1, minWidth: 0 }}
+            />
           </div>
         </div>
-      )}
-      <div style={{ ...sunkStyle, padding: "8px 24px 18px", borderRadius: "0 0 var(--radius-lg) var(--radius-lg)" }}>
+        <div className="field">
+          <label className="field__label">Note (optional)</label>
+          <input
+            className="input"
+            type="text"
+            placeholder="e.g. Emergency withdrawal"
+            value={adjNote}
+            onChange={(e) => setAdjNote(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
+          />
+        </div>
         <button
           className="btn"
           type="button"
-          onClick={onAdd}
-          style={{ width: "100%" }}
+          onClick={onAddAdjustment}
+          disabled={!adjAmount.trim() || isNaN(parseAdjAmount(adjAmount)) || parseAdjAmount(adjAmount) === 0}
         >
-          Add goal
+          Apply
         </button>
       </div>
     </>
@@ -167,11 +241,15 @@ function AddGoalForm({
 
 export default function GoalsPage() {
   const hydrated = useHydrated();
+  const isMobile = useIsMobile();
   const [state, setState] = useState<BudgetState | null>(null);
-  const [draft, setDraft] = useState<DraftGoal>({ name: "", type: "savings", targetAmount: 0, linkedBudgetCategoryIds: [], linkedExpenseIds: [] });
+  const [draft, setDraft] = useState<DraftGoal>(emptyGoalDraft);
+  const [addOpen, setAddOpen] = useState(false);
   const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
   const [adjAmount, setAdjAmount] = useState("");
+  const [adjSign, setAdjSign] = useState<AdjSign>(1);
   const [adjNote, setAdjNote] = useState("");
+  const [adjShowAll, setAdjShowAll] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const savedIndicator = useSavedIndicator();
   const [undo, setUndo] = useState<UndoEntry | null>(null);
@@ -186,11 +264,11 @@ export default function GoalsPage() {
     saveState(state);
   }, [hydrated, state]);
 
-  function addGoal() {
+  function addGoal(): boolean {
     const name = draft.name.trim();
     if (!name || draft.targetAmount <= 0) {
       setAttempted(true);
-      return;
+      return false;
     }
     setState((s) => {
       if (!s) return s;
@@ -206,9 +284,10 @@ export default function GoalsPage() {
       };
       return { ...s, goals: [...s.goals, newGoal] };
     });
-    setDraft({ name: "", type: "savings", targetAmount: 0, linkedBudgetCategoryIds: [], linkedExpenseIds: [] });
+    setDraft(emptyGoalDraft);
     setAttempted(false);
     savedIndicator.flash();
+    return true;
   }
 
   function updateGoal(id: string, patch: Partial<Goal>) {
@@ -241,8 +320,9 @@ export default function GoalsPage() {
   }
 
   function addManualAdjustment(goalId: string) {
-    const amt = parseAdjAmount(adjAmount);
-    if (isNaN(amt) || amt === 0) return;
+    const magnitude = parseAdjAmount(adjAmount);
+    if (isNaN(magnitude) || magnitude === 0) return;
+    const amt = adjSign * magnitude;
     setState((s) => {
       if (!s) return s;
       return {
@@ -253,7 +333,7 @@ export default function GoalsPage() {
             ...g,
             manualAdjustments: [
               ...g.manualAdjustments,
-              { id: newId(), amount: amt, note: adjNote.trim() || undefined },
+              { id: newId(), amount: amt, note: adjNote.trim() || undefined, date: toISODate(new Date()) },
             ],
           };
         }),
@@ -309,6 +389,7 @@ export default function GoalsPage() {
 
   const { goals, budgetCategories, recurringExpenses } = state;
   const { totalApplied, completed } = derived;
+  const expandedGoal = goals.find((g) => g.id === expandedGoalId) ?? null;
 
   return (
     <section className="container">
@@ -350,7 +431,7 @@ export default function GoalsPage() {
                       onClick={() => removeGoal(g.id)}
                       aria-label={`Delete ${g.name}`}
                     >
-                      ×
+                      <IconX size={16} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -411,9 +492,9 @@ export default function GoalsPage() {
             <button
               type="button"
               className="btn mobile-only-inline btn--jump"
-              onClick={() => jumpToAddForm()}
+              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
             >
-              + Add goal
+              <IconPlus size={12} aria-hidden="true" />Add goal
             </button>
           </div>
           <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
@@ -500,7 +581,9 @@ export default function GoalsPage() {
                               onClick={() => {
                                 setExpandedGoalId(isExpanded ? null : g.id);
                                 setAdjAmount("");
+                                setAdjSign(1);
                                 setAdjNote("");
+                                setAdjShowAll(false);
                               }}
                               style={{ fontSize: 11, padding: "2px 7px", fontWeight: 600, color: isExpanded ? "var(--ink-1)" : undefined }}
                             >
@@ -512,125 +595,30 @@ export default function GoalsPage() {
                               onClick={() => removeGoal(g.id)}
                               aria-label={`Delete ${g.name}`}
                             >
-                              ×
+                              <IconX size={16} aria-hidden="true" />
                             </button>
                           </div>
                         </td>
                       </tr>
-                      {isExpanded && (
+                      {isExpanded && !isMobile && (
                         <tr>
                           <td colSpan={6} style={{ background: "var(--surface-sunk)", padding: "14px 18px", borderTop: "1px dashed var(--border-soft)" }}>
-                            {/* Links section */}
-                            <p className="kicker" style={{ marginBottom: 8 }}>Links — {g.name}</p>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 20px", marginBottom: 16 }}>
-                              {budgetCategories.length === 0 && recurringExpenses.length === 0 && (
-                                <span style={{ fontSize: 12, color: "var(--ink-4)", fontStyle: "italic" }}>No budget categories or bills set up yet.</span>
-                              )}
-                              {budgetCategories.map((c) => {
-                                const checked = g.linkedBudgetCategoryIds.includes(c.id);
-                                return (
-                                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      onChange={() =>
-                                        updateGoal(g.id, {
-                                          linkedBudgetCategoryIds: checked
-                                            ? g.linkedBudgetCategoryIds.filter((id) => id !== c.id)
-                                            : [...g.linkedBudgetCategoryIds, c.id],
-                                        })
-                                      }
-                                      style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
-                                    />
-                                    {c.name}
-                                  </label>
-                                );
-                              })}
-                              {recurringExpenses.map((e) => {
-                                const checked = g.linkedExpenseIds.includes(e.id);
-                                return (
-                                  <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      onChange={() =>
-                                        updateGoal(g.id, {
-                                          linkedExpenseIds: checked
-                                            ? g.linkedExpenseIds.filter((id) => id !== e.id)
-                                            : [...g.linkedExpenseIds, e.id],
-                                        })
-                                      }
-                                      style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
-                                    />
-                                    {e.name}
-                                  </label>
-                                );
-                              })}
-                            </div>
-                            {/* Adjustments section */}
-                            <p className="kicker" style={{ marginBottom: 8 }}>Adjustments</p>
-                            {g.manualAdjustments.length > 0 ? (
-                              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 12 }}>
-                                {g.manualAdjustments.map((a) => (
-                                  <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-                                    <span style={{ fontFamily: "var(--font-numerals)", minWidth: 90, color: a.amount < 0 ? "var(--signal-red)" : "var(--ink-1)" }}>
-                                      {a.amount > 0 ? "+" : ""}{moneyFmt(a.amount)}
-                                    </span>
-                                    {a.note
-                                      ? <span style={{ color: "var(--ink-3)", fontStyle: "italic" }}>{a.note}</span>
-                                      : <span style={{ color: "var(--ink-4)", fontStyle: "italic" }}>—</span>
-                                    }
-                                    <button
-                                      className="btn btn--icon"
-                                      type="button"
-                                      style={{ marginLeft: "auto" }}
-                                      onClick={() => removeManualAdjustment(g.id, a.id)}
-                                      aria-label="Remove adjustment"
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p style={{ color: "var(--ink-4)", fontStyle: "italic", fontSize: 13, marginBottom: 10 }}>No manual adjustments yet.</p>
-                            )}
-                            <div
-                              className="inline-form inline-form--2col"
-                              style={{ padding: 0, background: "transparent", borderRadius: 0 }}
-                            >
-                              <div className="field">
-                                <label className="field__label">Amount</label>
-                                <input
-                                  className="input input--mono"
-                                  type="text"
-                                  inputMode="decimal"
-                                  placeholder="e.g. −500 or 100"
-                                  value={adjAmount}
-                                  onChange={(e) => setAdjAmount(e.target.value)}
-                                  onKeyDown={(e) => e.key === "Enter" && addManualAdjustment(g.id)}
-                                />
-                              </div>
-                              <div className="field">
-                                <label className="field__label">Note (optional)</label>
-                                <input
-                                  className="input"
-                                  type="text"
-                                  placeholder="e.g. Emergency withdrawal"
-                                  value={adjNote}
-                                  onChange={(e) => setAdjNote(e.target.value)}
-                                  onKeyDown={(e) => e.key === "Enter" && addManualAdjustment(g.id)}
-                                />
-                              </div>
-                              <button
-                                className="btn"
-                                type="button"
-                                onClick={() => addManualAdjustment(g.id)}
-                                disabled={!adjAmount.trim() || isNaN(parseAdjAmount(adjAmount)) || parseAdjAmount(adjAmount) === 0}
-                              >
-                                Apply
-                              </button>
-                            </div>
+                            <GoalEditor
+                              goal={g}
+                              budgetCategories={budgetCategories}
+                              recurringExpenses={recurringExpenses}
+                              onUpdate={(patch) => updateGoal(g.id, patch)}
+                              adjAmount={adjAmount}
+                              setAdjAmount={setAdjAmount}
+                              adjSign={adjSign}
+                              setAdjSign={setAdjSign}
+                              adjNote={adjNote}
+                              setAdjNote={setAdjNote}
+                              onAddAdjustment={() => addManualAdjustment(g.id)}
+                              onRemoveAdjustment={(adjId) => removeManualAdjustment(g.id, adjId)}
+                              showAllAdj={adjShowAll}
+                              onToggleShowAllAdj={() => setAdjShowAll((v) => !v)}
+                            />
                           </td>
                         </tr>
                       )}
@@ -640,7 +628,9 @@ export default function GoalsPage() {
               </tbody>
             </table>
           </div>
-          <AddGoalForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={addGoal} budgetCategories={budgetCategories} recurringExpenses={recurringExpenses} attempted={attempted} />
+          {!isMobile && (
+            <AddGoalForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={addGoal} budgetCategories={budgetCategories} recurringExpenses={recurringExpenses} attempted={attempted} />
+          )}
         </div>
       )}
 
@@ -653,6 +643,48 @@ export default function GoalsPage() {
           </div>
           <AddGoalForm draft={draft} setDraft={setDraft} onAdd={addGoal} budgetCategories={budgetCategories} recurringExpenses={recurringExpenses} attempted={attempted} />
         </div>
+      )}
+
+      {/* Mobile add sheet — same form the desktop inline block uses */}
+      {isMobile && addOpen && (
+        <BottomSheet open title="Add goal" onClose={() => setAddOpen(false)}>
+          <AddGoalForm
+            inSheet
+            draft={draft}
+            setDraft={setDraft}
+            onAdd={() => { if (addGoal()) setAddOpen(false); }}
+            budgetCategories={budgetCategories}
+            recurringExpenses={recurringExpenses}
+            attempted={attempted}
+          />
+        </BottomSheet>
+      )}
+
+      {/* Mobile edit sheet — same editor the desktop inline row uses */}
+      {isMobile && expandedGoal && (
+        <BottomSheet
+          open
+          title={`Edit — ${expandedGoal.name || "goal"}`}
+          onClose={() => setExpandedGoalId(null)}
+        >
+          <GoalEditor
+            goal={expandedGoal}
+            budgetCategories={budgetCategories}
+            recurringExpenses={recurringExpenses}
+            onUpdate={(patch) => updateGoal(expandedGoal.id, patch)}
+            adjAmount={adjAmount}
+            setAdjAmount={setAdjAmount}
+            adjSign={adjSign}
+            setAdjSign={setAdjSign}
+            adjNote={adjNote}
+            setAdjNote={setAdjNote}
+            onAddAdjustment={() => addManualAdjustment(expandedGoal.id)}
+            onRemoveAdjustment={(adjId) => removeManualAdjustment(expandedGoal.id, adjId)}
+            showAllAdj={adjShowAll}
+            onToggleShowAllAdj={() => setAdjShowAll((v) => !v)}
+            inSheet
+          />
+        </BottomSheet>
       )}
 
       {/* SavedIndicator and UndoToast */}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { IconPlus, IconX } from "@tabler/icons-react";
 import { loadState, newId, saveState, type BudgetCategory, type BudgetState } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
 import { isBudgetOverdrawn } from "../lib/allocations";
@@ -8,7 +9,10 @@ import { monthlyIncomeOf } from "../lib/month";
 import { moneyFmt } from "../lib/currency";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
+import { AddCategoryForm, emptyCategoryDraft, type CategoryFormDraft } from "../components/AddCategoryForm";
+import { BottomSheet } from "../components/BottomSheet";
 import { jumpToAddForm } from "../lib/jumpToAddForm";
+import { useIsMobile } from "../lib/useIsMobile";
 
 function AllocationRing({
   segments,
@@ -74,8 +78,10 @@ const COLORS = ["#2b2a26", "#5b5852", "#8a877e", "#b6301f", "#2f6a4a", "#a0522d"
 
 export default function BudgetPage() {
   const hydrated = useHydrated();
+  const isMobile = useIsMobile();
   const [state, setState] = useState<BudgetState | null>(null);
-  const [draft, setDraft] = useState<Omit<BudgetCategory, "id">>({ name: "", mode: "percent", value: 0 });
+  const [draft, setDraft] = useState<CategoryFormDraft>(emptyCategoryDraft);
+  const [addOpen, setAddOpen] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const savedIndicator = useSavedIndicator();
   const [undo, setUndo] = useState<UndoEntry | null>(null);
@@ -118,12 +124,12 @@ export default function BudgetPage() {
     });
   }
 
-  function add() {
+  function add(): boolean {
     const name = draft.name.trim();
     const value = Math.max(0, Number(draft.value) || 0);
     if (!name || value === 0) {
       setAttempted(true);
-      return;
+      return false;
     }
     setState((s) => {
       if (!s) return s;
@@ -132,9 +138,10 @@ export default function BudgetPage() {
         budgetCategories: [...s.budgetCategories, { id: newId(), name, mode: draft.mode, value }],
       };
     });
-    setDraft({ name: "", mode: "percent", value: 0 });
+    setDraft(emptyCategoryDraft);
     setAttempted(false);
     savedIndicator.flash();
+    return true;
   }
 
   const derived = useMemo(() => {
@@ -251,11 +258,11 @@ export default function BudgetPage() {
             <button
               type="button"
               className="btn mobile-only-inline btn--jump"
-              onClick={() => jumpToAddForm()}
+              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
             >
-              + Add category
+              <IconPlus size={12} aria-hidden="true" />Add category
             </button>
-            <span className={`badge${overdrawn ? " badge--red" : ""}`}>{percentTotal.toFixed(0)}% of remainder</span>
+            <span className={`badge mobile-hidden${overdrawn ? " badge--red" : ""}`}>{percentTotal.toFixed(0)}% of remainder</span>
           </div>
         </div>
 
@@ -299,7 +306,7 @@ export default function BudgetPage() {
                     </td>
                     <td className="text-tight">
                       <button className="btn btn--icon" type="button" onClick={() => remove(c.id)} aria-label={`Delete ${c.name}`}>
-                        ×
+                        <IconX size={16} aria-hidden="true" />
                       </button>
                     </td>
                   </tr>
@@ -308,49 +315,24 @@ export default function BudgetPage() {
           </table>
         </div>
 
-        {/* Inline add form */}
-        <div id="add-form" className="inline-form">
-          <div className="field">
-            <label className="field__label">New category</label>
-            <input
-              className="input"
-              placeholder="e.g. Travel fund"
-              value={draft.name}
-              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-            />
-            {attempted && !draft.name.trim() && <p className="field__error">Required</p>}
-          </div>
-          <div className="field">
-            <label className="field__label">Type</label>
-            <select
-              className="select"
-              value={draft.mode}
-              onChange={(e) => setDraft((d) => ({ ...d, mode: e.target.value as "percent" | "fixed" }))}
-            >
-              <option value="percent">Percent</option>
-              <option value="fixed">Fixed $</option>
-            </select>
-          </div>
-          <div className="field">
-            <label className="field__label">Value</label>
-            <input
-              className="input input--mono"
-              type="text"
-              inputMode="decimal"
-              placeholder="0"
-              value={draft.value || ""}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, value: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) }))
-              }
-              pattern="[0-9.]*"
-            />
-            {attempted && (Math.max(0, Number(draft.value) || 0) === 0) && <p className="field__error">Must be more than 0</p>}
-          </div>
-          <button className="btn" type="button" onClick={add}>
-            Add category
-          </button>
-        </div>
+        {/* Inline add form (desktop) */}
+        {!isMobile && (
+          <AddCategoryForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={add} attempted={attempted} />
+        )}
       </div>
+
+      {/* Mobile add sheet */}
+      {isMobile && addOpen && (
+        <BottomSheet open title="Add category" onClose={() => setAddOpen(false)}>
+          <AddCategoryForm
+            inSheet
+            draft={draft}
+            setDraft={setDraft}
+            onAdd={() => { if (add()) setAddOpen(false); }}
+            attempted={attempted}
+          />
+        </BottomSheet>
+      )}
 
       {/* SavedIndicator and UndoToast */}
       <SavedIndicator visible={savedIndicator.visible} />

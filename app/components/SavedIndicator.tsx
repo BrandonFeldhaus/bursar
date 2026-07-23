@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { IconCheck } from "@tabler/icons-react";
 
 export function useSavedIndicator(durationMs = 1600) {
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -26,7 +27,13 @@ export function SavedIndicator({ visible }: { visible: boolean }) {
       aria-live="polite"
       aria-atomic="true"
     >
-      {visible ? "Saved ✓" : ""}
+      {visible ? (
+        <>
+          Saved <IconCheck size={12} aria-hidden="true" />
+        </>
+      ) : (
+        ""
+      )}
     </span>
   );
 }

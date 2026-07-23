@@ -34,6 +34,18 @@ Tests use Mocha + Chai. The test runner is configured in `.mocharc.js` to pick u
 | `storage.ts` | Thin re-export shim over `budgetStorage.ts`; pages import from here |
 | `paychecks.ts` | `upcomingPaychecks` — forecasts future paycheck dates |
 
+### Add-form pattern (mobile bottom sheet)
+Every "add a row" flow uses one shared form component rendered in two containers: inline below the table on desktop (`formId="add-form"`, target of `jumpToAddForm`), and inside `<BottomSheet>` on mobile (`useIsMobile()` at 600px; the `+ Add X` header buttons open it). Add handlers return `boolean` so the sheet closes only on a successful add — validation failures keep it open.
+
+| Component (`app/components/`) | Used by |
+|---|---|
+| `AddBillForm` (`combinedDue` prop merges day+month for narrow cards) | expenses page, onboarding Bills step |
+| `AddCategoryForm` | budget page, onboarding Plan step |
+| `AddGoalForm` (links section auto-hides when nothing is linkable) | goals page, onboarding Goals step |
+| `AddSourceForm` (local to `income/page.tsx`) | income page only — onboarding's income step is a one-off full form |
+
+Empty states (goals page / onboarding Goals step with zero rows) keep the form inline even on mobile. The goals page's per-row "Edit" panel (`GoalEditor`) follows the same pattern: inline expanded `<tr>` on desktop, bottom sheet on mobile.
+
 ### Pay cycles
 `PayCycle = "biweekly" | "semimonthly" | "weekly"`
 
@@ -91,6 +103,8 @@ The design uses a "ruled ledger paper" aesthetic. Key class patterns:
 | `.page-head` | Page header block with `.page-head__title`, `.page-head__lead`, `.page-head__meta` |
 | `.stat-row` | Horizontal row of `.stat` cards |
 | `.segment` / `.segment__btn` | Pill toggle group |
+| `.bottom-sheet` | Mobile slide-up drawer (`components/BottomSheet.tsx`); pairs with `.dialog-overlay--sheet`; all add flows + goals edit use it via `useIsMobile()` at 600px |
+| `.inline-form--sheet` | Modifier that strips the sunk background/padding when an add form renders inside the bottom sheet |
 | `.btn--ghost` / `.btn--icon` / `.btn--danger` | Button variants |
 | `.kicker` | Small all-caps label above a title |
 

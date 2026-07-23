@@ -58,7 +58,8 @@ export type Goal = {
   targetAmount: number;
   linkedBudgetCategoryIds: string[];
   linkedExpenseIds: string[];
-  manualAdjustments: { id: string; amount: number; note?: string }[];
+  // date is a local calendar date ("YYYY-MM-DD"); absent on entries logged before dates existed
+  manualAdjustments: { id: string; amount: number; note?: string; date?: string }[];
   appliedPeriods: { periodId: string; amount: number }[];
 };
 
@@ -220,6 +221,7 @@ function normalizeGoals(raw: any[]): Goal[] {
               id: typeof a?.id === "string" ? a.id : newId(),
               amount: Number(a?.amount ?? 0) || 0,
               note: typeof a?.note === "string" && a.note.trim() ? a.note.trim() : undefined,
+              date: typeof a?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(a.date) ? a.date : undefined,
             }))
           : [],
         appliedPeriods: Array.isArray(g?.appliedPeriods)
@@ -248,7 +250,7 @@ function normalizeLockedMonths(raw: any[]): LockedMonth[] {
     .filter((lm: LockedMonth) => lm.monthKey.length > 0);
 }
 
-function normalizeParsed(parsed: any): BudgetState {
+export function normalizeParsed(parsed: any): BudgetState {
   const payCycle: PayCycle = coercePayCycle(parsed?.payCycle);
   const paycheckAmount = Math.max(0, Number(parsed?.paycheckAmount ?? parsed?.settings?.paycheckAmount ?? 0) || 0);
   const payCycleType: PayCycle = coercePayCycle(parsed?.settings?.payCycleType, payCycle);

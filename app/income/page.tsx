@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Info } from "lucide-react";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
+import { IconInfoCircle, IconPlus, IconX } from "@tabler/icons-react";
 import { loadState, newId, saveState, type BudgetState, type Income, type PayCycle } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
+import { useIsMobile } from "../lib/useIsMobile";
 import { todayISO, monthlyIncomeOf } from "../lib/month";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
+import { BottomSheet } from "../components/BottomSheet";
 import { moneyFmt } from "../lib/currency";
 import { jumpToAddForm } from "../lib/jumpToAddForm";
 
@@ -18,20 +20,130 @@ const CYCLE_OPTIONS: { value: PayCycle; label: string }[] = [
   { value: "semimonthly", label: "Semi-monthly" },
 ];
 
+type SourceDraft = {
+  name: string;
+  amount: string;
+  payCycle: PayCycle;
+  lastPaycheckDate: string;
+};
+
+function sourceDraftErrors(draft: SourceDraft) {
+  const parsedAmount = Number(draft.amount.replace(/[^0-9.]/g, ""));
+  return {
+    parsedAmount,
+    name: !draft.name.trim() ? "Required" : null,
+    amount: !(parsedAmount > 0) ? "Must be more than 0" : null,
+    date: needsAnchor(draft.payCycle) && !draft.lastPaycheckDate ? "Pick a paycheck date" : null,
+  };
+}
+
+function AddSourceForm({
+  draft,
+  setDraft,
+  onAdd,
+  attempted,
+  formId,
+  inSheet,
+}: {
+  draft: SourceDraft;
+  setDraft: Dispatch<SetStateAction<SourceDraft>>;
+  onAdd: () => void;
+  attempted?: boolean;
+  formId?: string;
+  inSheet?: boolean;
+}) {
+  const errs = sourceDraftErrors(draft);
+  return (
+    <div id={formId} className={`inline-form${needsAnchor(draft.payCycle) ? " inline-form--4col" : ""}${inSheet ? " inline-form--sheet" : ""}`}>
+      <div className={`field${attempted && errs.name ? " field--has-error" : ""}`}>
+        <label className="field__label" htmlFor="inc-draft-name">New source</label>
+        <input
+          id="inc-draft-name"
+          className="input"
+          placeholder="e.g. Day job"
+          value={draft.name}
+          aria-invalid={attempted && !!errs.name}
+          aria-describedby={attempted && errs.name ? "inc-draft-name-err" : undefined}
+          onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+        />
+        {attempted && errs.name && (
+          <span id="inc-draft-name-err" className="field__error">{errs.name}</span>
+        )}
+      </div>
+      <div className={`field${attempted && errs.amount ? " field--has-error" : ""}`}>
+        <label className="field__label" htmlFor="inc-draft-amount">Amount</label>
+        <input
+          id="inc-draft-amount"
+          className="input input--mono"
+          type="text"
+          inputMode="decimal"
+          pattern="[0-9.]*"
+          placeholder="0"
+          value={draft.amount}
+          aria-invalid={attempted && !!errs.amount}
+          aria-describedby={attempted && errs.amount ? "inc-draft-amount-err" : undefined}
+          onChange={(e) =>
+            setDraft((d) => ({ ...d, amount: e.target.value.replace(/[^0-9.]/g, "") }))
+          }
+        />
+        {attempted && errs.amount && (
+          <span id="inc-draft-amount-err" className="field__error">{errs.amount}</span>
+        )}
+      </div>
+      <div className="field">
+        <label className="field__label">Cycle</label>
+        <select
+          className="select"
+          value={draft.payCycle}
+          onChange={(e) => {
+            const next = e.target.value as PayCycle;
+            setDraft((d) => ({
+              ...d,
+              payCycle: next,
+              lastPaycheckDate: needsAnchor(next) ? d.lastPaycheckDate || todayISO() : "",
+            }));
+          }}
+        >
+          {CYCLE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+      {needsAnchor(draft.payCycle) && (
+        <div className={`field${attempted && errs.date ? " field--has-error" : ""}`}>
+          <label className="field__label" htmlFor="inc-draft-date">Last paycheck</label>
+          <input
+            id="inc-draft-date"
+            className="input"
+            type="date"
+            value={draft.lastPaycheckDate}
+            aria-invalid={attempted && !!errs.date}
+            aria-describedby={attempted && errs.date ? "inc-draft-date-err" : undefined}
+            onChange={(e) => setDraft((d) => ({ ...d, lastPaycheckDate: e.target.value }))}
+          />
+          {attempted && errs.date && (
+            <span id="inc-draft-date-err" className="field__error">{errs.date}</span>
+          )}
+        </div>
+      )}
+      <button className="btn" type="button" onClick={onAdd}>
+        Add source
+      </button>
+    </div>
+  );
+}
+
 export default function IncomePage() {
   const hydrated = useHydrated();
+  const isMobile = useIsMobile();
   const [state, setState] = useState<BudgetState | null>(null);
-  const [draft, setDraft] = useState<{
-    name: string;
-    amount: string;
-    payCycle: PayCycle;
-    lastPaycheckDate: string;
-  }>({
+  const [draft, setDraft] = useState<SourceDraft>({
     name: "",
     amount: "",
     payCycle: "biweekly",
     lastPaycheckDate: todayISO(),
   });
+  const [addOpen, setAddOpen] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [undo, setUndo] = useState<UndoEntry | null>(null);
   const saved = useSavedIndicator();
@@ -74,16 +186,11 @@ export default function IncomePage() {
     });
   }
 
-  const parsedAmount = Number(draft.amount.replace(/[^0-9.]/g, ""));
-  const nameError = !draft.name.trim() ? "Required" : null;
-  const amountError = !(parsedAmount > 0) ? "Must be more than 0" : null;
-  const dateError = needsAnchor(draft.payCycle) && !draft.lastPaycheckDate ? "Pick a paycheck date" : null;
-  const canAdd = !nameError && !amountError && !dateError;
-
-  function add() {
-    if (!canAdd) {
+  function add(): boolean {
+    const errs = sourceDraftErrors(draft);
+    if (errs.name || errs.amount || errs.date) {
       setAttempted(true);
-      return;
+      return false;
     }
     const name = draft.name.trim();
     setState((s) => {
@@ -95,7 +202,7 @@ export default function IncomePage() {
           {
             id: newId(),
             name,
-            amount: Math.max(0, parsedAmount),
+            amount: Math.max(0, errs.parsedAmount),
             cadence: "monthly" as const,
             payCycle: draft.payCycle,
             lastPaycheckDate: needsAnchor(draft.payCycle) ? draft.lastPaycheckDate || todayISO() : "",
@@ -106,6 +213,7 @@ export default function IncomePage() {
     setDraft({ name: "", amount: "", payCycle: "biweekly", lastPaycheckDate: todayISO() });
     setAttempted(false);
     saved.flash();
+    return true;
   }
 
   if (!hydrated || !state) {
@@ -139,7 +247,7 @@ export default function IncomePage() {
         <h1 className="page-head__title">Income ledger</h1>
         <p className="page-head__lead">Track all your income sources. Each one's paycheck dates are calculated independently and feed into your period breakdown.</p>
         <details className="cycle-info">
-          <summary><Info size={14} aria-hidden="true" />About pay cycle types</summary>
+          <summary><IconInfoCircle size={14} aria-hidden="true" />About pay cycle types</summary>
           <dl className="cycle-info__list">
             <div>
               <dt>Weekly</dt>
@@ -191,11 +299,11 @@ export default function IncomePage() {
             <button
               type="button"
               className="btn mobile-only-inline btn--jump"
-              onClick={() => jumpToAddForm()}
+              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
             >
-              + Add source
+              <IconPlus size={12} aria-hidden="true" />Add source
             </button>
-            <span className="badge">{state.incomes.length} sources</span>
+            <span className="badge mobile-hidden">{state.incomes.length} sources</span>
           </div>
         </div>
 
@@ -272,7 +380,7 @@ export default function IncomePage() {
                       aria-label={`Delete ${inc.name || "income"}`}
                       onClick={() => remove(inc.id)}
                     >
-                      ×
+                      <IconX size={16} aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
@@ -281,84 +389,24 @@ export default function IncomePage() {
           </table>
         </div>
 
-        {/* Inline add form */}
-        <div id="add-form" className={`inline-form${needsAnchor(draft.payCycle) ? " inline-form--4col" : ""}`}>
-          <div className={`field${attempted && nameError ? " field--has-error" : ""}`}>
-            <label className="field__label" htmlFor="inc-draft-name">New source</label>
-            <input
-              id="inc-draft-name"
-              className="input"
-              placeholder="e.g. Day job"
-              value={draft.name}
-              aria-invalid={attempted && !!nameError}
-              aria-describedby={attempted && nameError ? "inc-draft-name-err" : undefined}
-              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-            />
-            {attempted && nameError && (
-              <span id="inc-draft-name-err" className="field__error">{nameError}</span>
-            )}
-          </div>
-          <div className={`field${attempted && amountError ? " field--has-error" : ""}`}>
-            <label className="field__label" htmlFor="inc-draft-amount">Amount</label>
-            <input
-              id="inc-draft-amount"
-              className="input input--mono"
-              type="text"
-              inputMode="decimal"
-              pattern="[0-9.]*"
-              placeholder="0"
-              value={draft.amount}
-              aria-invalid={attempted && !!amountError}
-              aria-describedby={attempted && amountError ? "inc-draft-amount-err" : undefined}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, amount: e.target.value.replace(/[^0-9.]/g, "") }))
-              }
-            />
-            {attempted && amountError && (
-              <span id="inc-draft-amount-err" className="field__error">{amountError}</span>
-            )}
-          </div>
-          <div className="field">
-            <label className="field__label">Cycle</label>
-            <select
-              className="select"
-              value={draft.payCycle}
-              onChange={(e) => {
-                const next = e.target.value as PayCycle;
-                setDraft((d) => ({
-                  ...d,
-                  payCycle: next,
-                  lastPaycheckDate: needsAnchor(next) ? d.lastPaycheckDate || todayISO() : "",
-                }));
-              }}
-            >
-              {CYCLE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          {needsAnchor(draft.payCycle) && (
-            <div className={`field${attempted && dateError ? " field--has-error" : ""}`}>
-              <label className="field__label" htmlFor="inc-draft-date">Last paycheck</label>
-              <input
-                id="inc-draft-date"
-                className="input"
-                type="date"
-                value={draft.lastPaycheckDate}
-                aria-invalid={attempted && !!dateError}
-                aria-describedby={attempted && dateError ? "inc-draft-date-err" : undefined}
-                onChange={(e) => setDraft((d) => ({ ...d, lastPaycheckDate: e.target.value }))}
-              />
-              {attempted && dateError && (
-                <span id="inc-draft-date-err" className="field__error">{dateError}</span>
-              )}
-            </div>
-          )}
-          <button className="btn" type="button" onClick={add}>
-            Add source
-          </button>
-        </div>
+        {/* Inline add form (desktop) */}
+        {!isMobile && (
+          <AddSourceForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={add} attempted={attempted} />
+        )}
       </div>
+
+      {/* Mobile add sheet */}
+      {isMobile && addOpen && (
+        <BottomSheet open title="Add source" onClose={() => setAddOpen(false)}>
+          <AddSourceForm
+            inSheet
+            draft={draft}
+            setDraft={setDraft}
+            onAdd={() => { if (add()) setAddOpen(false); }}
+            attempted={attempted}
+          />
+        </BottomSheet>
+      )}
       <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </section>
   );

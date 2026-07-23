@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { IconPlus, IconX } from "@tabler/icons-react";
 import { loadState, newId, saveState, type BudgetState, type RecurringExpense } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
 import {
@@ -15,8 +16,11 @@ import {
 } from "../lib/month";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
+import { AddBillForm, billDraftErrors, emptyBillDraft, type BillFormDraft } from "../components/AddBillForm";
+import { BottomSheet } from "../components/BottomSheet";
 import { moneyFmt, moneyShort } from "../lib/currency";
 import { jumpToAddForm } from "../lib/jumpToAddForm";
+import { useIsMobile } from "../lib/useIsMobile";
 
 function BillsCalendar({ state, month }: { state: BudgetState; month: string }) {
   const { year, monthIndex, lastDay } = monthBounds(month);
@@ -154,10 +158,12 @@ function BillsAgenda({ state, month }: { state: BudgetState; month: string }) {
 
 export default function ExpensesPage() {
   const hydrated = useHydrated();
+  const isMobile = useIsMobile();
   const [state, setState] = useState<BudgetState | null>(null);
   const [month, setMonth] = useState(currentMonthKey());
   const [view, setView] = useState<"calendar" | "list">("calendar");
-  const [draft, setDraft] = useState({ name: "", amount: "", cadence: "monthly" as "monthly" | "annual", dueDay: 1, dueMonth: 1 });
+  const [draft, setDraft] = useState<BillFormDraft>(emptyBillDraft);
+  const [addOpen, setAddOpen] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [undo, setUndo] = useState<UndoEntry | null>(null);
   const saved = useSavedIndicator();
@@ -201,15 +207,11 @@ export default function ExpensesPage() {
     });
   }
 
-  const parsedAmount = Number(draft.amount.replace(/[^0-9.]/g, ""));
-  const nameError = !draft.name.trim() ? "Required" : null;
-  const amountError = !(parsedAmount > 0) ? "Must be more than 0" : null;
-  const canAdd = !nameError && !amountError;
-
-  function add() {
-    if (!canAdd) {
+  function add(): boolean {
+    const errs = billDraftErrors(draft);
+    if (errs.name || errs.amount) {
       setAttempted(true);
-      return;
+      return false;
     }
     const name = draft.name.trim();
     setState((s) => {
@@ -221,7 +223,7 @@ export default function ExpensesPage() {
           {
             id: newId(),
             name,
-            amount: Math.max(0, parsedAmount),
+            amount: Math.max(0, errs.parsedAmount),
             cadence: draft.cadence,
             dueDay: draft.dueDay,
             dueMonth: draft.dueMonth,
@@ -230,9 +232,10 @@ export default function ExpensesPage() {
         ],
       };
     });
-    setDraft({ name: "", amount: "", cadence: "monthly", dueDay: 1, dueMonth: 1 });
+    setDraft(emptyBillDraft);
     setAttempted(false);
     saved.flash();
+    return true;
   }
 
   const totals = useMemo(() => {
@@ -354,11 +357,11 @@ export default function ExpensesPage() {
             <button
               type="button"
               className="btn mobile-only-inline btn--jump"
-              onClick={() => jumpToAddForm()}
+              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
             >
-              + Add bill
+              <IconPlus size={12} aria-hidden="true" />Add bill
             </button>
-            {balanced && <span className="stamp stamp--audited">Balanced</span>}
+            {balanced && <span className="stamp stamp--audited mobile-hidden">Balanced</span>}
           </div>
         </div>
 
@@ -441,7 +444,7 @@ export default function ExpensesPage() {
                   </td>
                   <td className="text-tight">
                     <button className="btn btn--icon" type="button" onClick={() => remove(exp.id)} aria-label={`Delete ${exp.name || "bill"}`}>
-                      ×
+                      <IconX size={16} aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
@@ -450,92 +453,24 @@ export default function ExpensesPage() {
           </table>
         </div>
 
-        {/* Inline add form */}
-        <div id="add-form" className={`inline-form${draft.cadence === "annual" ? " inline-form--5col" : " inline-form--4col"}`}>
-          <div className={`field${attempted && nameError ? " field--has-error" : ""}`}>
-            <label className="field__label" htmlFor="exp-draft-name">New notation</label>
-            <input
-              id="exp-draft-name"
-              className="input"
-              placeholder="e.g. Internet"
-              value={draft.name}
-              aria-invalid={attempted && !!nameError}
-              aria-describedby={attempted && nameError ? "exp-draft-name-err" : undefined}
-              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-            />
-            {attempted && nameError && (
-              <span id="exp-draft-name-err" className="field__error">{nameError}</span>
-            )}
-          </div>
-          <div className={`field${attempted && amountError ? " field--has-error" : ""}`}>
-            <label className="field__label" htmlFor="exp-draft-amount">Amount</label>
-            <input
-              id="exp-draft-amount"
-              className="input input--mono"
-              type="text"
-              inputMode="decimal"
-              pattern="[0-9.]*"
-              placeholder="0"
-              value={draft.amount}
-              aria-invalid={attempted && !!amountError}
-              aria-describedby={attempted && amountError ? "exp-draft-amount-err" : undefined}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, amount: e.target.value.replace(/[^0-9.]/g, "") }))
-              }
-            />
-            {attempted && amountError && (
-              <span id="exp-draft-amount-err" className="field__error">{amountError}</span>
-            )}
-          </div>
-          <div className="field">
-            <label className="field__label">Cadence</label>
-            <select
-              className="select"
-              value={draft.cadence}
-              onChange={(e) => setDraft((d) => ({ ...d, cadence: e.target.value as "monthly" | "annual" }))}
-            >
-              <option value="monthly">Monthly</option>
-              <option value="annual">Annual</option>
-            </select>
-          </div>
-          <div className="field">
-            <label className="field__label">Due day</label>
-            <input
-              className="input input--mono"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="1"
-              value={draft.dueDay || ""}
-              onChange={(e) => {
-                const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
-                const n = digits === "" ? 0 : Math.min(31, Number(digits));
-                setDraft((d) => ({ ...d, dueDay: n }));
-              }}
-              onBlur={() => { if (!draft.dueDay || draft.dueDay < 1) setDraft((d) => ({ ...d, dueDay: 1 })); }}
-            />
-          </div>
-          {draft.cadence === "annual" && (
-            <div className="field">
-              <label className="field__label">Month</label>
-              <select
-                className="select"
-                value={draft.dueMonth}
-                onChange={(e) => setDraft((d) => ({ ...d, dueMonth: Number(e.target.value) }))}
-              >
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>
-                    {new Date(2026, i, 1).toLocaleDateString("en-US", { month: "short" })}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <button className="btn" type="button" onClick={add}>
-            Add bill
-          </button>
-        </div>
+        {/* Inline add form (desktop) */}
+        {!isMobile && (
+          <AddBillForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={add} attempted={attempted} />
+        )}
       </div>
+
+      {/* Mobile add sheet */}
+      {isMobile && addOpen && (
+        <BottomSheet open title="Add bill" onClose={() => setAddOpen(false)}>
+          <AddBillForm
+            inSheet
+            draft={draft}
+            setDraft={setDraft}
+            onAdd={() => { if (add()) setAddOpen(false); }}
+            attempted={attempted}
+          />
+        </BottomSheet>
+      )}
       <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </section>
   );

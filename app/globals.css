@@ -2101,6 +2101,10 @@ select {
 
 /* Mobile-only inline element (matches responsive card-view breakpoint) */
 .mobile-only-inline { display: none; }
+/* Inverse: hidden at the same breakpoint (badges/stamps that would crowd the + Add button) */
+@media (max-width: 600px) {
+  .mobile-hidden { display: none; }
+}
 @media (max-width: 600px) {
   .mobile-only-inline { display: inline-flex; }
 }
@@ -2825,6 +2829,72 @@ select {
   gap: 10px;
   margin-top: 4px;
   flex-wrap: wrap;
+}
+
+/* =========================================================
+   BOTTOM SHEET — mobile edit drawer (goals page)
+   ========================================================= */
+
+.dialog-overlay--sheet {
+  place-items: end stretch;
+  padding: 0;
+}
+
+.bottom-sheet {
+  width: 100%;
+  background: var(--paper-1);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-paper-lg);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  animation: sheet-up 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-sheet { animation: none; }
+}
+
+.bottom-sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px 10px;
+  border-bottom: 1px dashed var(--border-soft);
+  flex-shrink: 0;
+}
+
+.bottom-sheet__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.1;
+  margin: 0;
+  padding-right: 8px; /* script-font ascenders overhang their advance width */
+  color: var(--ink-1);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bottom-sheet__body {
+  padding: 14px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+}
+
+/* Add-row forms rendered inside the sheet lose their sunk-paper chrome
+   (declared after the .inline-form media queries so it wins the cascade) */
+.inline-form--sheet {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
 }
 
 /* =========================================================

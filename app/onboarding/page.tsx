@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Info } from "lucide-react";
+import { IconInfoCircle, IconPlus, IconX } from "@tabler/icons-react";
 import { useRouter } from "next/navigation";
 import { defaultBudget, loadBudget, newId, saveBudget, type BudgetCategory, type BudgetState, type Goal, type PayCycle, type RecurringExpense } from "../lib/budgetStorage";
 import { useHydrated } from "../lib/useHydrated";
+import { useIsMobile } from "../lib/useIsMobile";
 import { todayISO } from "../lib/month";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
+import { BottomSheet } from "../components/BottomSheet";
+import { AddBillForm, billDraftErrors, emptyBillDraft, type BillFormDraft } from "../components/AddBillForm";
+import { AddCategoryForm, emptyCategoryDraft } from "../components/AddCategoryForm";
+import { AddGoalForm, emptyGoalDraft, type DraftGoal } from "../components/AddGoalForm";
 import { jumpToAddForm } from "../lib/jumpToAddForm";
 
 type IncomeDraft = { name: string; amount: number; payCycle: PayCycle; lastPaycheckDate: string };
@@ -16,7 +21,9 @@ type GoalDraft = { name: string; type: "savings" | "debt"; targetAmount: number 
 export default function OnboardingPage() {
   const router = useRouter();
   const hydrated = useHydrated();
+  const isMobile = useIsMobile();
   const [step, setStep] = useState(0);
+  const [addSheet, setAddSheet] = useState<null | "bill" | "alloc" | "goal">(null);
   const [income, setIncome] = useState<IncomeDraft>({
     name: "Day job",
     amount: 1800,
@@ -30,8 +37,8 @@ export default function OnboardingPage() {
     { id: newId(), name: "Phone", amount: 45, cadence: "monthly", dueDay: 20, dueMonth: 1 },
     { id: newId(), name: "Car insurance", amount: 600, cadence: "annual", dueDay: 15, dueMonth: 6 },
   ]);
-  const [billDraft, setBillDraft] = useState<Omit<BillDraft, "id">>({ name: "", amount: 0, cadence: "monthly", dueDay: 1, dueMonth: 1 });
-  const [allocDraft, setAllocDraft] = useState<Omit<BudgetCategory, "id">>({ name: "", mode: "percent", value: 0 });
+  const [billDraft, setBillDraft] = useState<BillFormDraft>(emptyBillDraft);
+  const [allocDraft, setAllocDraft] = useState<Omit<BudgetCategory, "id">>(emptyCategoryDraft);
   const [allocations, setAllocations] = useState<BudgetCategory[]>([
     { id: newId(), name: "Savings", mode: "percent", value: 25 },
     { id: newId(), name: "Spending", mode: "percent", value: 50 },
@@ -41,21 +48,32 @@ export default function OnboardingPage() {
   const [goals, setGoals] = useState<(GoalDraft & { id: string })[]>([
     { id: newId(), name: "Emergency fund", type: "savings", targetAmount: 9000 },
   ]);
-  const [goalDraft, setGoalDraft] = useState<GoalDraft>({ name: "", type: "savings", targetAmount: 0 });
+  const [goalDraft, setGoalDraft] = useState<DraftGoal>(emptyGoalDraft);
   const [attemptedBill, setAttemptedBill] = useState(false);
   const [attemptedAlloc, setAttemptedAlloc] = useState(false);
   const [attemptedGoal, setAttemptedGoal] = useState(false);
   const [undo, setUndo] = useState<UndoEntry | null>(null);
 
-  function addBill() {
-    const name = billDraft.name.trim();
-    if (!name || billDraft.amount <= 0) {
+  function addBill(): boolean {
+    const errs = billDraftErrors(billDraft);
+    if (errs.name || errs.amount) {
       setAttemptedBill(true);
-      return;
+      return false;
     }
-    setBills((xs) => [...xs, { id: newId(), ...billDraft, name }]);
-    setBillDraft({ name: "", amount: 0, cadence: "monthly", dueDay: 1, dueMonth: 1 });
+    setBills((xs) => [
+      ...xs,
+      {
+        id: newId(),
+        name: billDraft.name.trim(),
+        amount: Math.max(0, errs.parsedAmount),
+        cadence: billDraft.cadence,
+        dueDay: billDraft.dueDay,
+        dueMonth: billDraft.dueMonth,
+      },
+    ]);
+    setBillDraft(emptyBillDraft);
     setAttemptedBill(false);
+    return true;
   }
 
   function removeBill(id: string) {
@@ -76,15 +94,16 @@ export default function OnboardingPage() {
     });
   }
 
-  function addAllocation() {
+  function addAllocation(): boolean {
     const name = allocDraft.name.trim();
     if (!name || allocDraft.value <= 0) {
       setAttemptedAlloc(true);
-      return;
+      return false;
     }
     setAllocations((xs) => [...xs, { id: newId(), ...allocDraft, name }]);
-    setAllocDraft({ name: "", mode: "percent", value: 0 });
+    setAllocDraft(emptyCategoryDraft);
     setAttemptedAlloc(false);
+    return true;
   }
 
   function removeAllocation(id: string) {
@@ -105,15 +124,16 @@ export default function OnboardingPage() {
     });
   }
 
-  function addGoal() {
+  function addGoal(): boolean {
     const name = goalDraft.name.trim();
     if (!name || goalDraft.targetAmount <= 0) {
       setAttemptedGoal(true);
-      return;
+      return false;
     }
-    setGoals((xs) => [...xs, { id: newId(), ...goalDraft, name }]);
-    setGoalDraft({ name: "", type: "savings", targetAmount: 0 });
+    setGoals((xs) => [...xs, { id: newId(), name, type: goalDraft.type, targetAmount: goalDraft.targetAmount }]);
+    setGoalDraft(emptyGoalDraft);
     setAttemptedGoal(false);
+    return true;
   }
 
   function removeGoal(id: string) {
@@ -260,7 +280,7 @@ export default function OnboardingPage() {
                   ))}
                 </div>
                 <details className="cycle-info">
-                  <summary><Info size={14} aria-hidden="true" />About pay cycle types</summary>
+                  <summary><IconInfoCircle size={14} aria-hidden="true" />About pay cycle types</summary>
                   <dl className="cycle-info__list">
                     <div>
                       <dt>Weekly</dt>
@@ -315,8 +335,8 @@ export default function OnboardingPage() {
               Recurring obligations. Annual ones get spread across the year automatically.
             </p>
             <div className="mobile-only-inline" style={{ width: "100%", justifyContent: "flex-end", marginBottom: 8 }}>
-              <button type="button" className="btn btn--jump" onClick={() => jumpToAddForm()}>
-                + Add bill
+              <button type="button" className="btn btn--jump" onClick={() => (isMobile ? setAddSheet("bill") : jumpToAddForm())}>
+                <IconPlus size={12} aria-hidden="true" />Add bill
               </button>
             </div>
             <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
@@ -403,7 +423,7 @@ export default function OnboardingPage() {
                           aria-label={`Delete ${b.name}`}
                           onClick={() => removeBill(b.id)}
                         >
-                          ×
+                          <IconX size={16} aria-hidden="true" />
                         </button>
                       </td>
                     </tr>
@@ -411,89 +431,16 @@ export default function OnboardingPage() {
                 </tbody>
               </table>
             </div>
-            <div id="add-form" className="inline-form inline-form--4col">
-              <div className={`field${attemptedBill && !billDraft.name.trim() ? " field--has-error" : ""}`}>
-                <label className="field__label" htmlFor="onb-bill-name">New notation</label>
-                <input
-                  id="onb-bill-name"
-                  className="input"
-                  placeholder="e.g. Internet"
-                  value={billDraft.name}
-                  aria-invalid={attemptedBill && !billDraft.name.trim()}
-                  onChange={(e) => setBillDraft((d) => ({ ...d, name: e.target.value }))}
-                />
-                {attemptedBill && !billDraft.name.trim() && (
-                  <span className="field__error">Required</span>
-                )}
-              </div>
-              <div className={`field${attemptedBill && billDraft.amount <= 0 ? " field--has-error" : ""}`}>
-                <label className="field__label" htmlFor="onb-bill-amount">Amount</label>
-                <input
-                  id="onb-bill-amount"
-                  className="input input--mono"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0"
-                  value={billDraft.amount || ""}
-                  aria-invalid={attemptedBill && billDraft.amount <= 0}
-                  onChange={(e) => setBillDraft((d) => ({ ...d, amount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) }))}
-                />
-                {attemptedBill && billDraft.amount <= 0 && (
-                  <span className="field__error">Must be more than 0</span>
-                )}
-              </div>
-              <div className="field">
-                <label className="field__label">Cadence</label>
-                <select
-                  className="select"
-                  value={billDraft.cadence}
-                  onChange={(e) => setBillDraft((d) => ({ ...d, cadence: e.target.value as "monthly" | "annual" }))}
-                >
-                  <option value="monthly">Monthly</option>
-                  <option value="annual">Annual</option>
-                </select>
-              </div>
-              <div className="field">
-                <label className="field__label">Due{billDraft.cadence === "annual" ? " day / month" : " day"}</label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    className="input input--mono"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    placeholder="1"
-                    value={billDraft.dueDay || ""}
-                    style={{ width: "52px", flexShrink: 0 }}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
-                      const n = digits === "" ? 0 : Math.min(31, Number(digits));
-                      setBillDraft((d) => ({ ...d, dueDay: n }));
-                    }}
-                    onBlur={() => { if (!billDraft.dueDay || billDraft.dueDay < 1) setBillDraft((d) => ({ ...d, dueDay: 1 })); }}
-                  />
-                  {billDraft.cadence === "annual" && (
-                    <select
-                      className="select"
-                      value={billDraft.dueMonth}
-                      onChange={(e) => setBillDraft((d) => ({ ...d, dueMonth: Number(e.target.value) }))}
-                    >
-                      {Array.from({ length: 12 }, (_, i) => (
-                        <option key={i + 1} value={i + 1}>
-                          {new Date(2026, i, 1).toLocaleDateString("en-US", { month: "short" })}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              </div>
-              <button
-                className="btn"
-                type="button"
-                onClick={addBill}
-              >
-                Add bill
-              </button>
-            </div>
+            {!isMobile && (
+              <AddBillForm
+                formId="add-form"
+                combinedDue
+                draft={billDraft}
+                setDraft={setBillDraft}
+                onAdd={addBill}
+                attempted={attemptedBill}
+              />
+            )}
           </div>
         )}
 
@@ -506,8 +453,8 @@ export default function OnboardingPage() {
               How should every paycheck be split after bills?
             </p>
             <div className="mobile-only-inline" style={{ width: "100%", justifyContent: "flex-end", marginBottom: 8 }}>
-              <button type="button" className="btn btn--jump" onClick={() => jumpToAddForm()}>
-                + Add category
+              <button type="button" className="btn btn--jump" onClick={() => (isMobile ? setAddSheet("alloc") : jumpToAddForm())}>
+                <IconPlus size={12} aria-hidden="true" />Add category
               </button>
             </div>
             <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
@@ -561,7 +508,7 @@ export default function OnboardingPage() {
                           aria-label={`Delete ${a.name}`}
                           onClick={() => removeAllocation(a.id)}
                         >
-                          ×
+                          <IconX size={16} aria-hidden="true" />
                         </button>
                       </td>
                     </tr>
@@ -569,56 +516,15 @@ export default function OnboardingPage() {
                 </tbody>
               </table>
             </div>
-            <div id="add-form" className="inline-form">
-              <div className={`field${attemptedAlloc && !allocDraft.name.trim() ? " field--has-error" : ""}`}>
-                <label className="field__label" htmlFor="onb-alloc-name">New category</label>
-                <input
-                  id="onb-alloc-name"
-                  className="input"
-                  placeholder="e.g. Travel fund"
-                  value={allocDraft.name}
-                  aria-invalid={attemptedAlloc && !allocDraft.name.trim()}
-                  onChange={(e) => setAllocDraft((d) => ({ ...d, name: e.target.value }))}
-                />
-                {attemptedAlloc && !allocDraft.name.trim() && (
-                  <span className="field__error">Required</span>
-                )}
-              </div>
-              <div className="field">
-                <label className="field__label">Type</label>
-                <select
-                  className="select"
-                  value={allocDraft.mode}
-                  onChange={(e) => setAllocDraft((d) => ({ ...d, mode: e.target.value as "percent" | "fixed" }))}
-                >
-                  <option value="percent">Percent</option>
-                  <option value="fixed">Fixed $</option>
-                </select>
-              </div>
-              <div className={`field${attemptedAlloc && allocDraft.value <= 0 ? " field--has-error" : ""}`}>
-                <label className="field__label" htmlFor="onb-alloc-value">Value</label>
-                <input
-                  id="onb-alloc-value"
-                  className="input input--mono"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0"
-                  value={allocDraft.value || ""}
-                  aria-invalid={attemptedAlloc && allocDraft.value <= 0}
-                  onChange={(e) => setAllocDraft((d) => ({ ...d, value: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) }))}
-                />
-                {attemptedAlloc && allocDraft.value <= 0 && (
-                  <span className="field__error">Must be more than 0</span>
-                )}
-              </div>
-              <button
-                className="btn"
-                type="button"
-                onClick={addAllocation}
-              >
-                Add category
-              </button>
-            </div>
+            {!isMobile && (
+              <AddCategoryForm
+                formId="add-form"
+                draft={allocDraft}
+                setDraft={setAllocDraft}
+                onAdd={addAllocation}
+                attempted={attemptedAlloc}
+              />
+            )}
           </div>
         )}
 
@@ -635,8 +541,8 @@ export default function OnboardingPage() {
             </p>
             {goals.length > 0 && (
               <div className="mobile-only-inline" style={{ width: "100%", justifyContent: "flex-end", marginBottom: 8 }}>
-                <button type="button" className="btn btn--jump" onClick={() => jumpToAddForm()}>
-                  + Add goal
+                <button type="button" className="btn btn--jump" onClick={() => (isMobile ? setAddSheet("goal") : jumpToAddForm())}>
+                  <IconPlus size={12} aria-hidden="true" />Add goal
                 </button>
               </div>
             )}
@@ -692,7 +598,7 @@ export default function OnboardingPage() {
                             aria-label={`Delete ${g.name}`}
                             onClick={() => removeGoal(g.id)}
                           >
-                            ×
+                            <IconX size={16} aria-hidden="true" />
                           </button>
                         </td>
                       </tr>
@@ -701,56 +607,17 @@ export default function OnboardingPage() {
                 </table>
               </div>
             )}
-            <div id="add-form" className={`inline-form${goals.length > 0 ? "" : " inline-form--no-top-border"}`} style={goals.length === 0 ? { borderRadius: 10 } : {}}>
-              <div className={`field${attemptedGoal && !goalDraft.name.trim() ? " field--has-error" : ""}`}>
-                <label className="field__label" htmlFor="onb-goal-name">Goal name</label>
-                <input
-                  id="onb-goal-name"
-                  className="input"
-                  placeholder="e.g. Emergency fund"
-                  value={goalDraft.name}
-                  aria-invalid={attemptedGoal && !goalDraft.name.trim()}
-                  onChange={(e) => setGoalDraft((d) => ({ ...d, name: e.target.value }))}
-                />
-                {attemptedGoal && !goalDraft.name.trim() && (
-                  <span className="field__error">Required</span>
-                )}
-              </div>
-              <div className="field">
-                <label className="field__label">Type</label>
-                <select
-                  className="select"
-                  value={goalDraft.type}
-                  onChange={(e) => setGoalDraft((d) => ({ ...d, type: e.target.value as "savings" | "debt" }))}
-                >
-                  <option value="savings">Savings</option>
-                  <option value="debt">Debt payoff</option>
-                </select>
-              </div>
-              <div className={`field${attemptedGoal && goalDraft.targetAmount <= 0 ? " field--has-error" : ""}`}>
-                <label className="field__label" htmlFor="onb-goal-target">Target ($)</label>
-                <input
-                  id="onb-goal-target"
-                  className="input input--mono"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0"
-                  value={goalDraft.targetAmount || ""}
-                  aria-invalid={attemptedGoal && goalDraft.targetAmount <= 0}
-                  onChange={(e) => setGoalDraft((d) => ({ ...d, targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) }))}
-                />
-                {attemptedGoal && goalDraft.targetAmount <= 0 && (
-                  <span className="field__error">Must be more than 0</span>
-                )}
-              </div>
-              <button
-                className="btn"
-                type="button"
-                onClick={addGoal}
-              >
-                Add goal
-              </button>
-            </div>
+            {(goals.length === 0 || !isMobile) && (
+              <AddGoalForm
+                formId="add-form"
+                draft={goalDraft}
+                setDraft={setGoalDraft}
+                onAdd={addGoal}
+                budgetCategories={[]}
+                recurringExpenses={[]}
+                attempted={attemptedGoal}
+              />
+            )}
           </div>
         )}
 
@@ -775,6 +642,43 @@ export default function OnboardingPage() {
           )}
         </div>
       </div>
+      {/* Mobile add sheets — same shared forms the desktop inline blocks use */}
+      {isMobile && addSheet === "bill" && (
+        <BottomSheet open title="Add bill" onClose={() => setAddSheet(null)}>
+          <AddBillForm
+            inSheet
+            combinedDue
+            draft={billDraft}
+            setDraft={setBillDraft}
+            onAdd={() => { if (addBill()) setAddSheet(null); }}
+            attempted={attemptedBill}
+          />
+        </BottomSheet>
+      )}
+      {isMobile && addSheet === "alloc" && (
+        <BottomSheet open title="Add category" onClose={() => setAddSheet(null)}>
+          <AddCategoryForm
+            inSheet
+            draft={allocDraft}
+            setDraft={setAllocDraft}
+            onAdd={() => { if (addAllocation()) setAddSheet(null); }}
+            attempted={attemptedAlloc}
+          />
+        </BottomSheet>
+      )}
+      {isMobile && addSheet === "goal" && (
+        <BottomSheet open title="Add goal" onClose={() => setAddSheet(null)}>
+          <AddGoalForm
+            inSheet
+            draft={goalDraft}
+            setDraft={setGoalDraft}
+            onAdd={() => { if (addGoal()) setAddSheet(null); }}
+            budgetCategories={[]}
+            recurringExpenses={[]}
+            attempted={attemptedGoal}
+          />
+        </BottomSheet>
+      )}
       <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </div>
   );

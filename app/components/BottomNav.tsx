@@ -2,40 +2,48 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CircleDollarSign, LayoutGrid, ReceiptText, Settings, Target, type LucideIcon } from "lucide-react";
+import {
+  IconChartBar,
+  IconCoin,
+  IconLayoutGrid,
+  IconReceipt,
+  IconSettings,
+  IconTarget,
+  type Icon as TablerIcon,
+} from "@tabler/icons-react";
 
-type Item = { href: string; label: string; Icon: LucideIcon };
+type Item = { href: string; label: string; Icon: TablerIcon };
 
 const items: Item[] = [
   {
     href: "/",
     label: "Overview",
-    Icon: BarChart3,
+    Icon: IconChartBar,
   },
   {
     href: "/expenses",
     label: "Expenses",
-    Icon: ReceiptText,
+    Icon: IconReceipt,
   },
   {
     href: "/budget",
     label: "Budget",
-    Icon: LayoutGrid,
+    Icon: IconLayoutGrid,
   },
   {
     href: "/goals",
     label: "Goals",
-    Icon: Target,
+    Icon: IconTarget,
   },
   {
     href: "/income",
     label: "Income",
-    Icon: CircleDollarSign,
+    Icon: IconCoin,
   },
   {
     href: "/settings",
     label: "Settings",
-    Icon: Settings,
+    Icon: IconSettings,
   },
 ];
 
@@ -59,7 +67,7 @@ export function BottomNav() {
                 aria-current={active ? "page" : undefined}
               >
                 <span className="bottomNavIcon" aria-hidden="true">
-                  <Icon size={18} strokeWidth={1.8} />
+                  <Icon size={18} stroke={1.8} />
                 </span>
                 <span className="bottomNavLabel">{item.label}</span>
               </Link>
