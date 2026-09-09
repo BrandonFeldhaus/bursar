@@ -220,7 +220,7 @@ export default function OnboardingPage() {
         {/* Step dots */}
         <div className="onboarding-step-meta">
           {STEPS.map((s, i) => (
-            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <span key={i} className="onboarding-step">
               <span
                 className={[
                   "onboarding-step-dot",
@@ -228,8 +228,8 @@ export default function OnboardingPage() {
                   i < step ? "onboarding-step-dot--done" : "",
                 ].filter(Boolean).join(" ")}
               />
-              <span style={{ color: i === step ? "var(--ink-1)" : "var(--ink-3)" }}>{s}</span>
-              {i < STEPS.length - 1 && <span style={{ color: "var(--ink-4)", margin: "0 6px" }}>·</span>}
+              <span className={`onboarding-step__label${i === step ? " onboarding-step__label--active" : ""}`}>{s}</span>
+              {i < STEPS.length - 1 && <span className="onboarding-step__sep">·</span>}
             </span>
           ))}
         </div>
@@ -238,11 +238,11 @@ export default function OnboardingPage() {
         {step === 0 && (
           <div>
             <p className="kicker">Income</p>
-            <h1 className="page-head__title" style={{ marginBottom: 10 }}>Open the book</h1>
-            <p className="page-head__lead" style={{ marginBottom: 24 }}>
+            <h1 className="page-head__title onboarding-title">Open the book</h1>
+            <p className="page-head__lead onboarding-lead">
               Start with your primary paycheck. You can add more sources after.
             </p>
-            <div style={{ display: "grid", gap: 18 }}>
+            <div className="onboarding-form">
               <div className="field">
                 <label className="field__label">Source name</label>
                 <input
@@ -320,7 +320,7 @@ export default function OnboardingPage() {
               <p className="field__hint">Pick a .json file exported from Bursar (or Paper &amp; Ink) to skip setup entirely.</p>
               <label className="btn btn--ghost onboarding-file-btn">
                 Choose file
-                <input type="file" accept=".json,application/json" style={{ display: "none" }} onChange={importFile} />
+                <input type="file" accept=".json,application/json" className="fileInputHidden" onChange={importFile} />
               </label>
             </div>
           </div>
@@ -330,23 +330,23 @@ export default function OnboardingPage() {
         {step === 1 && (
           <div>
             <p className="kicker">Bills</p>
-            <h1 className="page-head__title" style={{ marginBottom: 10 }}>List your bills</h1>
-            <p className="page-head__lead" style={{ marginBottom: 24 }}>
+            <h1 className="page-head__title onboarding-title">List your bills</h1>
+            <p className="page-head__lead onboarding-lead">
               Recurring obligations. Annual ones get spread across the year automatically.
             </p>
-            <div className="mobile-only-inline" style={{ width: "100%", justifyContent: "flex-end", marginBottom: 8 }}>
+            <div className="mobile-only-inline onboarding-add-row">
               <button type="button" className="btn btn--jump" onClick={() => (isMobile ? setAddSheet("bill") : jumpToAddForm())}>
                 <IconPlus size={12} aria-hidden="true" />Add bill
               </button>
             </div>
-            <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
-              <table className="ledger-table ledger-table--responsive onboarding-table">
+            <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
+              <table className="ledger-table ledger-table--responsive onboarding-table ledger-table--onb-bills">
                 <thead>
                   <tr>
-                    <th style={{ width: "32%" }}>Notation</th>
-                    <th className="text-right" style={{ width: "16%" }}>Amount</th>
-                    <th style={{ width: "22%" }}>Cadence</th>
-                    <th style={{ width: "26%" }}>Due</th>
+                    <th>Notation</th>
+                    <th className="text-right">Amount</th>
+                    <th>Cadence</th>
+                    <th>Due</th>
                     <th className="text-tight" />
                   </tr>
                 </thead>
@@ -368,7 +368,6 @@ export default function OnboardingPage() {
                           inputMode="decimal"
                           placeholder="0"
                           value={b.amount || ""}
-                          style={{ textAlign: "right" }}
                           onChange={(e) =>
                             setBills((xs) => xs.map((x) => x.id === b.id ? { ...x, amount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) } : x))
                           }
@@ -385,15 +384,14 @@ export default function OnboardingPage() {
                         </select>
                       </td>
                       <td data-label="Due">
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <div className="field__row">
                           <input
-                            className="input input--mono"
+                            className="input input--mono input--day"
                             type="text"
                             inputMode="numeric"
                             pattern="[0-9]*"
                             placeholder="1"
                             value={b.dueDay || ""}
-                            style={{ width: "52px", flexShrink: 0 }}
                             onChange={(e) => {
                               const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
                               const n = digits === "" ? 0 : Math.min(31, Number(digits));
@@ -448,22 +446,22 @@ export default function OnboardingPage() {
         {step === 2 && (
           <div>
             <p className="kicker">Plan</p>
-            <h1 className="page-head__title" style={{ marginBottom: 10 }}>Plan the leftover</h1>
-            <p className="page-head__lead" style={{ marginBottom: 24 }}>
+            <h1 className="page-head__title onboarding-title">Plan the leftover</h1>
+            <p className="page-head__lead onboarding-lead">
               How should every paycheck be split after bills?
             </p>
-            <div className="mobile-only-inline" style={{ width: "100%", justifyContent: "flex-end", marginBottom: 8 }}>
+            <div className="mobile-only-inline onboarding-add-row">
               <button type="button" className="btn btn--jump" onClick={() => (isMobile ? setAddSheet("alloc") : jumpToAddForm())}>
                 <IconPlus size={12} aria-hidden="true" />Add category
               </button>
             </div>
-            <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
-              <table className="ledger-table ledger-table--responsive onboarding-table">
+            <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
+              <table className="ledger-table ledger-table--responsive onboarding-table ledger-table--onb-categories">
                 <thead>
                   <tr>
-                    <th style={{ width: "45%" }}>Category</th>
-                    <th style={{ width: "25%" }}>Type</th>
-                    <th className="text-right" style={{ width: "25%" }}>Value</th>
+                    <th>Category</th>
+                    <th>Type</th>
+                    <th className="text-right">Value</th>
                     <th className="text-tight" />
                   </tr>
                 </thead>
@@ -495,7 +493,6 @@ export default function OnboardingPage() {
                           inputMode="decimal"
                           placeholder="0"
                           value={a.value || ""}
-                          style={{ textAlign: "right" }}
                           onChange={(e) =>
                             setAllocations((xs) => xs.map((x) => x.id === a.id ? { ...x, value: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) } : x))
                           }
@@ -532,28 +529,28 @@ export default function OnboardingPage() {
         {step === 3 && (
           <div>
             <p className="kicker">Goals</p>
-            <h1 className="page-head__title" style={{ marginBottom: 10 }}>Set your targets</h1>
-            <p className="page-head__lead" style={{ marginBottom: 8 }}>
+            <h1 className="page-head__title onboarding-title">Set your targets</h1>
+            <p className="page-head__lead onboarding-lead onboarding-lead--tight">
               Optional — add savings targets or debt payoff goals to track alongside your budget.
             </p>
-            <p className="field__hint" style={{ marginBottom: 24 }}>
+            <p className="field__hint onboarding-hint">
               You can link goals to budget categories and bills from the Goals page after setup.
             </p>
             {goals.length > 0 && (
-              <div className="mobile-only-inline" style={{ width: "100%", justifyContent: "flex-end", marginBottom: 8 }}>
+              <div className="mobile-only-inline onboarding-add-row">
                 <button type="button" className="btn btn--jump" onClick={() => (isMobile ? setAddSheet("goal") : jumpToAddForm())}>
                   <IconPlus size={12} aria-hidden="true" />Add goal
                 </button>
               </div>
             )}
             {goals.length > 0 && (
-              <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
-                <table className="ledger-table ledger-table--responsive onboarding-table">
+              <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
+                <table className="ledger-table ledger-table--responsive onboarding-table ledger-table--onb-goals">
                   <thead>
                     <tr>
-                      <th style={{ width: "45%" }}>Goal</th>
-                      <th style={{ width: "25%" }}>Type</th>
-                      <th className="text-right" style={{ width: "25%" }}>Target</th>
+                      <th>Goal</th>
+                      <th>Type</th>
+                      <th className="text-right">Target</th>
                       <th className="text-tight" />
                     </tr>
                   </thead>
@@ -585,8 +582,7 @@ export default function OnboardingPage() {
                             inputMode="decimal"
                             placeholder="0"
                             value={g.targetAmount || ""}
-                            style={{ textAlign: "right" }}
-                            onChange={(e) =>
+                              onChange={(e) =>
                               setGoals((xs) => xs.map((x) => x.id === g.id ? { ...x, targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) } : x))
                             }
                           />
@@ -622,7 +618,7 @@ export default function OnboardingPage() {
         )}
 
         {/* Navigation */}
-        <div className="row-between" style={{ marginTop: 32 }}>
+        <div className="row-between onboarding-nav">
           <button
             className="btn btn--ghost"
             type="button"

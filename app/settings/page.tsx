@@ -85,9 +85,9 @@ export default function SettingsPage() {
             <button className="btn" type="button" onClick={exportData}>
               Export JSON
             </button>
-            <label className="btn btn--ghost" style={{ cursor: "pointer" }}>
+            <label className="btn btn--ghost">
               Import JSON
-              <input type="file" accept="application/json,.json" onChange={importData} style={{ display: "none" }} />
+              <input type="file" accept="application/json,.json" onChange={importData} className="fileInputHidden" />
             </label>
           </div>
         </div>
@@ -110,7 +110,7 @@ export default function SettingsPage() {
 
       {/* Status message */}
       {status && (
-        <div className="sheet" style={{ padding: "14px 22px" }}>
+        <div className="sheet sheet--bar">
           <p className="muted" role="status">{status}</p>
         </div>
       )}

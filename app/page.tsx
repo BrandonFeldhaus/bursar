@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { loadState, saveState, type BudgetState } from "./lib/storage";
 import {
@@ -22,10 +22,7 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 function Money({ value, struck = false }: { value: number; struck?: boolean }) {
   const v = Number(value) || 0;
   return (
-    <span
-      className={`money${v < 0 ? " money--neg" : ""}`}
-      style={{ fontSize: 17, textDecoration: struck ? "line-through" : "none", opacity: struck ? 0.55 : 1 }}
-    >
+    <span className={`money money--md${v < 0 ? " money--neg" : ""}${struck ? " money--struck" : ""}`}>
       {moneyFmt(v)}
     </span>
   );
@@ -62,14 +59,8 @@ function Timeline({
       <div className="timeline__rail">
         {todayDay != null && (
           <div
-            style={{
-              position: "absolute",
-              left: `${((todayDay - 1) / Math.max(lastDay - 1, 1)) * 100}%`,
-              top: -8, width: 1.5, height: 24,
-              background: "var(--signal-red)",
-              transform: "translateX(-50%)",
-              opacity: 0.6,
-            }}
+            className="timeline__today"
+            style={{ "--pos": `${((todayDay - 1) / Math.max(lastDay - 1, 1)) * 100}%` } as CSSProperties}
             title={`Today: day ${todayDay}`}
           />
         )}
@@ -83,8 +74,8 @@ function Timeline({
               : "timeline__tick timeline__tick--bill";
           return (
             <span key={i}>
-              <div className={cls} style={{ left: `${pct}%` }} title={`${e.tooltip}: ${e.label}`} />
-              <div className="timeline__lbl" style={{ left: `${pct}%` }}>{e.day}</div>
+              <div className={cls} style={{ "--pos": `${pct}%` } as CSSProperties} title={`${e.tooltip}: ${e.label}`} />
+              <div className="timeline__lbl" style={{ "--pos": `${pct}%` } as CSSProperties}>{e.day}</div>
             </span>
           );
         })}
@@ -184,7 +175,7 @@ function PeriodCard({
           <div className="period-card__paid-bar">
             <div
               className={`period-card__paid-bar__fill${paidCount === billCount ? " period-card__paid-bar__fill--all" : ""}`}
-              style={{ width: `${paidPct}%` }}
+              style={{ "--pct": `${paidPct}%` } as CSSProperties}
             />
           </div>
           <span className="period-card__paid-count">{paidCount}/{billCount}</span>
@@ -230,12 +221,12 @@ function PeriodCard({
       <div className="recent-list">
         {tab === "income" && (
           period.incomes.length === 0 ? (
-            <p className="muted" style={{ fontStyle: "italic" }}>No income in this period.</p>
+            <p className="muted muted--italic">No income in this period.</p>
           ) : (
             period.incomes.map((inc) => (
               <div key={inc.id} className="recent-item">
                 <span className="recent-item__name">{inc.name}</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span className="recent-item__group recent-item__group--wide">
                   <span className="recent-item__date">{formatShortDate(inc.date)}</span>
                   <Money value={inc.amount} />
                 </span>
@@ -246,25 +237,25 @@ function PeriodCard({
 
         {tab === "bills" && (
           period.bills.length === 0 ? (
-            <p className="muted" style={{ fontStyle: "italic" }}>No bills due in this period.</p>
+            <p className="muted muted--italic">No bills due in this period.</p>
           ) : (
             period.bills.map((b) => (
               <div key={b.id} className={`recent-item${b.paid ? " recent-item--paid" : ""}`}>
-                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="recent-item__group">
                   <input
                     type="checkbox"
                     checked={b.paid}
                     onChange={() => !readOnly && onTogglePaid(b.expenseId, b.periodId)}
                     disabled={readOnly}
-                    style={{ accentColor: "var(--ink-1)", cursor: readOnly ? "default" : "pointer", opacity: readOnly ? 0.5 : 1 }}
+                    className={`recent-item__check${readOnly ? " recent-item__check--locked" : ""}`}
                     title={readOnly ? "Locked — unlock month to edit" : (b.paid ? "Mark unpaid" : "Mark paid")}
                   />
                   <span className="recent-item__name">{b.name}</span>
                   {b.cadence === "annual" && (
-                    <span className="badge" style={{ fontSize: 9 }}>annual</span>
+                    <span className="badge badge--xs">annual</span>
                   )}
                 </span>
-                <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span className="recent-item__group recent-item__group--wide">
                   <span className="recent-item__date">{formatShortDate(b.date)}</span>
                   <Money value={b.amount} struck={b.paid} />
                 </span>
@@ -275,14 +266,14 @@ function PeriodCard({
 
         {tab === "leftover" && (
           allocations.length === 0 ? (
-            <p className="muted" style={{ fontStyle: "italic" }}>No budget categories set. Add them in the Budget page.</p>
+            <p className="muted muted--italic">No budget categories set. Add them in the Budget page.</p>
           ) : (
             <>
               {allocations.map((a) => (
                 <div key={a.id} className="recent-item">
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className="recent-item__group">
                     <span className="recent-item__name">{a.name}</span>
-                    <span className="badge" style={{ fontSize: 9 }}>
+                    <span className="badge badge--xs">
                       {a.mode === "percent" ? `${a.value}%` : "fixed"}
                     </span>
                   </span>
@@ -290,8 +281,8 @@ function PeriodCard({
                 </div>
               ))}
               {Math.abs(unallocated) > 0.005 && (
-                <div className="recent-item" style={{ opacity: 0.55 }}>
-                  <span className="recent-item__name" style={{ fontStyle: "italic" }}>Unallocated</span>
+                <div className="recent-item recent-item--faint">
+                  <span className="recent-item__name recent-item__name--italic">Unallocated</span>
                   <Money value={unallocated} />
                 </div>
               )}
@@ -301,18 +292,18 @@ function PeriodCard({
 
         {tab === "goals" && (
           goalItems.length === 0 ? (
-            <p className="muted" style={{ fontStyle: "italic" }}>No goals yet. Add them in the Goals page.</p>
+            <p className="muted muted--italic">No goals yet. Add them in the Goals page.</p>
           ) : (
             <>
               {goalItems.map(({ goal, linkedAmount, isApplied, totalApplied, pct }) => (
                 <div key={goal.id} className="goal-period-item">
-                  <div className="recent-item" style={{ marginBottom: 0 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div className="recent-item">
+                    <span className="recent-item__group">
                       <input
                         type="checkbox"
                         checked={isApplied}
                         onChange={() => !readOnly && onToggleGoalPeriod(goal.id, periodId, linkedAmount)}
-                        style={{ accentColor: "var(--ink-1)", cursor: (readOnly || linkedAmount <= 0) ? (readOnly ? "default" : "not-allowed") : "pointer", opacity: (readOnly || linkedAmount <= 0) ? 0.4 : 1 }}
+                        className={`recent-item__check${readOnly ? " recent-item__check--locked" : linkedAmount <= 0 ? " recent-item__check--nolink" : ""}`}
                         disabled={readOnly || linkedAmount <= 0}
                         title={readOnly ? "Locked — unlock month to edit" : linkedAmount > 0
                           ? (isApplied ? "Remove contribution" : "Apply contribution")
@@ -320,25 +311,22 @@ function PeriodCard({
                         }
                       />
                       <span className="recent-item__name">{goal.name}</span>
-                      <span className="badge" style={{ fontSize: 9 }}>
+                      <span className="badge badge--xs">
                         {goal.type === "savings" ? "savings" : "debt"}
                       </span>
                     </span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span className="recent-item__group">
                       {linkedAmount > 0 ? (
                         <Money value={linkedAmount} />
                       ) : (
-                        <span style={{ fontFamily: "var(--font-stamp)", fontSize: 10, color: "var(--ink-4)", letterSpacing: "0.12em" }}>no link</span>
+                        <span className="goal-period-item__nolink">no link</span>
                       )}
                     </span>
                   </div>
                   <div className="goal-period-item__bar">
                     <div
-                      className="goal-period-item__fill"
-                      style={{
-                        width: `${pct}%`,
-                        background: pct >= 100 ? "#2f6a4a" : goal.type === "debt" ? "var(--signal-red)" : "var(--ink-1)",
-                      }}
+                      className={`goal-period-item__fill${pct >= 100 ? " goal-period-item__fill--done" : goal.type === "debt" ? " goal-period-item__fill--debt" : ""}`}
+                      style={{ "--pct": `${pct}%` } as CSSProperties}
                     />
                   </div>
                   <div className="goal-period-item__meta">
@@ -348,8 +336,8 @@ function PeriodCard({
                 </div>
               ))}
               {totalGoalAmount > 0 && (
-                <div className="recent-item" style={{ marginTop: 4, opacity: 0.6 }}>
-                  <span className="recent-item__name" style={{ fontStyle: "italic" }}>Total linked</span>
+                <div className="recent-item recent-item--total">
+                  <span className="recent-item__name recent-item__name--italic">Total linked</span>
                   <Money value={totalGoalAmount} />
                 </div>
               )}
@@ -549,10 +537,10 @@ export default function Home() {
         </header>
         <div className="stat-row" aria-hidden="true">
           {[0, 1, 2].map((i) => (
-            <article key={i} className="sheet stat" style={{ padding: "16px 22px 18px" }}>
-              <span className="skeleton skeleton--line" style={{ width: 90 }} />
-              <div style={{ marginTop: 8 }}>
-                <span className="skeleton skeleton--line" style={{ height: 26, width: 140 }} />
+            <article key={i} className="sheet stat sheet--stat">
+              <span className="skeleton skeleton--line skeleton--stat-label" />
+              <div className="skeleton-gap">
+                <span className="skeleton skeleton--line skeleton--stat-value" />
               </div>
             </article>
           ))}
@@ -621,16 +609,16 @@ export default function Home() {
       </header>
 
       {/* Month picker */}
-      <div className="sheet" style={{ padding: "14px 22px 14px 22px" }}>
+      <div className="sheet sheet--bar">
         <div className="row-between">
           <div>
             <p className="kicker">Ledger month</p>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 32, lineHeight: 1.1, color: "var(--ink-1)" }}>
+            <div className="month-title">
+              <div className="month-title__label">
                 {formatMonthLabel(month)}
               </div>
               {isReadOnly && (
-                <span className="stamp" style={{ fontSize: 10, padding: "2px 7px", letterSpacing: "0.12em" }}>
+                <span className="stamp stamp--sm">
                   {isArchived ? (isPastMonth ? "Archived" : "Locked") : "Past"}
                 </span>
               )}
@@ -667,12 +655,12 @@ export default function Home() {
           </div>
         </div>
         {!isPastMonth && !isArchived && (
-          <p className="muted" style={{ marginTop: 8, fontStyle: "italic", fontSize: 13 }}>
+          <p className="muted month-note">
             Lock this month to freeze its data — future edits to income, expenses, or budget categories won't affect it.
           </p>
         )}
         {isArchived && isUnlocked && (
-          <p className="muted" style={{ marginTop: 8, fontStyle: "italic", fontSize: 13 }}>
+          <p className="muted month-note">
             Unlocked — edits here update your live income, bills, and budget for every unlocked month. Re-lock to restore the {isPastMonth ? "archived" : "locked"} snapshot.
           </p>
         )}
@@ -702,34 +690,34 @@ export default function Home() {
 
       {/* Month stats row */}
       <div className="stat-row">
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Total income</div>
           <div className="stat__value">{moneyFmt(totals.income)}</div>
         </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Total bills due</div>
           <div className="stat__value">{moneyFmt(totals.bills)}</div>
         </article>
-        <article className="sheet stat stat--accent" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat stat--accent sheet--stat">
           <div className="stat__label">Month leftover</div>
           <div className={`stat__value${totals.leftover < 0 ? " stat__value--neg" : ""}`}>{moneyFmt(totals.leftover)}</div>
         </article>
       </div>
 
       {/* Cash-flow timeline */}
-      <div className="sheet" style={{ padding: "20px 28px 24px" }}>
+      <div className="sheet timeline-card">
         <div className="row-between mb-3">
           <div>
             <p className="kicker">Cash-flow timeline</p>
             <h2 className="section-title">{formatMonthLabel(month)}</h2>
           </div>
-          <div className="timeline__legend" style={{ marginTop: 0 }}>
-            <span><span className="timeline__legend-dot" style={{ background: "var(--ink-1)" }} />Income</span>
+          <div className="timeline__legend timeline__legend--inline">
+            <span><span className="timeline__legend-dot timeline__legend-dot--income" />Income</span>
             <span>
-              <span className="timeline__legend-dot" style={{ background: "var(--paper-1)", border: "2px solid var(--signal-red)", display: "inline-block" }} />
+              <span className="timeline__legend-dot timeline__legend-dot--bill" />
               Bill due
             </span>
-            <span><span className="timeline__legend-dot" style={{ background: "rgba(47,106,74,0.6)" }} />Paid</span>
+            <span><span className="timeline__legend-dot timeline__legend-dot--paid" />Paid</span>
           </div>
         </div>
         <Timeline events={events} lastDay={lastDay} todayDay={todayDay} />
@@ -737,7 +725,7 @@ export default function Home() {
         <div className="row-between">
           <div>
             <span className="page-head__meta-label">End-of-month balance</span>
-            <div style={{ fontFamily: "var(--font-numerals)", fontSize: 22, marginTop: 2, color: "var(--ink-1)" }}>
+            <div className="timeline__balance">
               {moneyFmt(dayBalances[dayBalances.length - 1] ?? 0)}
             </div>
           </div>

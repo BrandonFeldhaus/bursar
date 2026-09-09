@@ -29,6 +29,51 @@
   --ink-shadow: 0 2px 4px rgba(60, 45, 20, 0.10), 0 8px 18px rgba(60, 45, 20, 0.10);
   --paper-shadow-lg: 0 4px 8px rgba(60, 45, 20, 0.10), 0 18px 38px rgba(60, 45, 20, 0.14);
   --shadow-inset: inset 0 0 0 1px rgba(26, 58, 107, 0.07);
+
+  /* Signal colours — green = paid / complete, red = danger / overdue */
+  --signal-green: #2f6a4a;
+  --signal-green-a60: rgba(47, 106, 74, 0.6);
+  --signal-green-a14: rgba(47, 106, 74, 0.14);
+  --signal-green-a10: rgba(47, 106, 74, 0.10);
+  --signal-red-a20: rgba(182, 48, 31, 0.20);
+  --signal-red-a18: rgba(182, 48, 31, 0.18);
+  --signal-red-a10: rgba(182, 48, 31, 0.10);
+  --brand-green: #1f6b3a;
+
+  /* Ink alpha scale — graphite washes over paper (a04 = 4% ink, etc.)
+     --ink-3 (62%) and --ink-4 (32%) below are part of the same scale. */
+  --ink-a04: rgba(43, 42, 38, 0.04);
+  --ink-a06: rgba(43, 42, 38, 0.06);
+  --ink-a07: rgba(43, 42, 38, 0.07);
+  --ink-a08: rgba(43, 42, 38, 0.08);
+  --ink-a10: rgba(43, 42, 38, 0.10);
+  --ink-a14: rgba(43, 42, 38, 0.14);
+  --ink-a18: rgba(43, 42, 38, 0.18);
+  --ink-a40: rgba(43, 42, 38, 0.40);
+  --ink-a45: rgba(43, 42, 38, 0.45);
+  --ink-a55: rgba(43, 42, 38, 0.55);
+
+  /* Paper alpha — translucent paper over ink (bottom nav, toast button) */
+  --paper-a96: rgba(251, 246, 233, 0.96);
+  --paper-a35: rgba(251, 246, 233, 0.35);
+  --paper-a10: rgba(251, 246, 233, 0.10);
+
+  /* Chart series — allocation ring segments and bars, in order */
+  --chart-1: var(--ink-1);
+  --chart-2: #5b5852;
+  --chart-3: #8a877e;
+  --chart-4: var(--signal-red);
+  --chart-5: var(--signal-green);
+  --chart-6: #a0522d;
+  --chart-7: #8b6f47;
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
 }
 
 * {
@@ -90,7 +135,7 @@ textarea {
   z-index: 100;
   padding: 8px 12px;
   background: var(--paper);
-  border: 1px solid rgba(43, 42, 38, 0.18);
+  border: 1px solid var(--border);
   border-radius: 999px;
   transform: translateY(-200%);
 }
@@ -190,14 +235,14 @@ h2 {
 
 .brand:hover {
   text-decoration: none;
-  background: rgba(43, 42, 38, 0.06);
+  background: var(--ink-a06);
 }
 
 .brandMark {
   width: 14px;
   height: 14px;
   border-radius: 999px;
-  background: #1f6b3a;
+  background: var(--brand-green);
   box-shadow:
     inset -1.5px -1.5px 2.5px rgba(0, 0, 0, 0.35),
     inset 1px 1px 1.5px rgba(255, 255, 255, 0.25),
@@ -236,7 +281,7 @@ h2 {
 .topNavLink:hover,
 .bottomNavLink:hover {
   text-decoration: none;
-  background: rgba(43, 42, 38, 0.06);
+  background: var(--ink-a06);
 }
 
 .topNavLink.isActive,
@@ -419,6 +464,8 @@ td,
   font-size: 14px;
 }
 
+.muted--italic { font-style: italic; }
+
 /* =========================================================
    STAT CARDS
    ========================================================= */
@@ -496,12 +543,12 @@ td,
   background: transparent;
   color: var(--text);
   box-shadow: none;
-  border: 1px solid rgba(43, 42, 38, 0.18);
+  border: 1px solid var(--border);
 }
 
 .button.ghost:hover,
 .rowAction.ghost:hover {
-  background: rgba(43, 42, 38, 0.06);
+  background: var(--ink-a06);
   filter: none;
 }
 
@@ -548,7 +595,7 @@ textarea {
   min-height: 32px;
   padding: 0 4px;
   border: 0;
-  border-bottom: 1.5px solid rgba(43, 42, 38, 0.40);
+  border-bottom: 1.5px solid var(--ink-a40);
   border-radius: 0;
   background: transparent;
   color: var(--text);
@@ -574,12 +621,12 @@ textarea {
   height: auto;
   padding-top: 8px;
   line-height: 1.5;
-  border-bottom: 1.5px solid rgba(43, 42, 38, 0.40);
+  border-bottom: 1.5px solid var(--ink-a40);
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: rgba(43, 42, 38, 0.32);
+  color: var(--ink-4);
 }
 
 input[type="radio"],
@@ -609,7 +656,7 @@ select {
 }
 
 .fieldset {
-  border: 1px solid rgba(43, 42, 38, 0.14);
+  border: 1px solid var(--ink-a14);
   border-radius: 6px;
   padding: 14px;
 }
@@ -626,9 +673,9 @@ select {
   gap: 8px;
   min-height: 32px;
   padding: 0 12px;
-  border: 1px solid rgba(43, 42, 38, 0.14);
+  border: 1px solid var(--ink-a14);
   border-radius: 3px;
-  background: rgba(43, 42, 38, 0.04);
+  background: var(--ink-a04);
   font-family: "Special Elite", "Courier New", monospace;
   font-style: normal;
   font-size: 10px;
@@ -743,9 +790,9 @@ select {
   min-height: 28px;
   padding: 0 12px;
   border-radius: 3px;
-  border: 1px solid rgba(43, 42, 38, 0.14);
+  border: 1px solid var(--ink-a14);
   color: var(--muted);
-  background: rgba(43, 42, 38, 0.04);
+  background: var(--ink-a04);
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -757,7 +804,7 @@ select {
 }
 
 .stepChip.isDone {
-  border-color: rgba(182, 48, 31, 0.20);
+  border-color: var(--signal-red-a20);
   color: var(--accent);
 }
 
@@ -765,7 +812,7 @@ select {
   width: 100%;
   height: 14px;
   border-radius: 3px;
-  background: rgba(43, 42, 38, 0.10);
+  background: var(--ink-a10);
   overflow: hidden;
 }
 
@@ -786,7 +833,7 @@ select {
   min-height: 24px;
   padding: 0 10px;
   border-radius: 3px;
-  background: rgba(43, 42, 38, 0.08);
+  background: var(--ink-a08);
   color: var(--text);
   font-size: 10px;
   letter-spacing: 0.14em;
@@ -794,7 +841,7 @@ select {
 }
 
 .badge.danger {
-  background: rgba(182, 48, 31, 0.12);
+  background: var(--signal-red-soft);
   color: var(--accent);
 }
 
@@ -817,7 +864,7 @@ select {
   text-transform: uppercase;
   transform: rotate(-4deg);
   opacity: 0.78;
-  color: #2f6a4a;
+  color: var(--signal-green);
 }
 
 .stamp.danger {
@@ -893,7 +940,7 @@ select {
   display: none;
 }
 
-@media (max-width: 720px) {
+@media (width <= 900px) {
   .bottomNav {
     display: block;
     position: fixed;
@@ -902,10 +949,10 @@ select {
     bottom: 0;
     z-index: 60;
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
-    background: rgba(251, 246, 233, 0.96);
+    background: var(--paper-a96);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-top: 1px solid rgba(43, 42, 38, 0.10);
+    border-top: 1px solid var(--border-soft);
     transform: translateZ(0);
     will-change: transform;
   }
@@ -938,7 +985,7 @@ select {
 
 .bottomNavLink.isActive {
   color: var(--text);
-  background: rgba(43, 42, 38, 0.07);
+  background: var(--ink-a07);
 }
 
 .bottomNavLabel {
@@ -956,13 +1003,13 @@ select {
    RESPONSIVE
    ========================================================= */
 
-@media (min-width: 900px) {
+@media (width > 900px) {
   .topNav {
     display: inline-flex;
   }
 }
 
-@media (max-width: 899px) {
+@media (width <= 900px) {
   :root {
     --sheet-width: calc(100vw - 24px);
     --sheet-left: 12px;
@@ -1079,6 +1126,10 @@ select {
     var(--surface);
 }
 
+/* Padding variants for common sheet roles */
+.sheet--stat { padding: 16px 22px 18px; }
+.sheet--bar { padding: 14px 22px; }
+
 /* =========================================================
    SECTION TITLE / KICKER variants
    ========================================================= */
@@ -1109,16 +1160,16 @@ select {
   grid-template-columns: repeat(4, 1fr);
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
+  .stat-row { grid-template-columns: 1fr; gap: 10px; }
   .stat-row--4 { grid-template-columns: repeat(2, 1fr); }
 }
 
-@media (max-width: 720px) {
-  .stat-row { grid-template-columns: 1fr; gap: 10px; }
+@media (width <= 600px) {
   .stat-row--4 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 }
 
-@media (max-width: 480px) {
+@media (width <= 420px) {
   .stat-row--4 { grid-template-columns: 1fr; }
 }
 
@@ -1211,9 +1262,9 @@ select {
   border: 1px solid var(--border);
   box-shadow: none;
 }
-.btn--ghost:hover { background: rgba(43,42,38,0.06); filter: none; }
+.btn--ghost:hover { background: var(--ink-a06); filter: none; }
 .btn--quiet {
-  background: rgba(43,42,38,0.06);
+  background: var(--ink-a06);
   color: var(--ink-1);
   box-shadow: none;
 }
@@ -1221,14 +1272,15 @@ select {
 .btn--icon {
   padding: 0;
   width: 32px; height: 32px;
-  background: rgba(182, 48, 31, 0.10);
+  background: var(--signal-red-a10);
   color: var(--signal-red);
   box-shadow: none;
   font-size: 20px;
   line-height: 1;
 }
-.btn--icon:hover { background: rgba(182, 48, 31, 0.18); color: var(--signal-red); }
+.btn--icon:hover { background: var(--signal-red-a18); color: var(--signal-red); }
 .btn--lg { height: 44px; padding: 0 24px; font-size: 12px; }
+.btn--block { width: 100%; }
 
 /* =========================================================
    INPUT / SELECT / FIELD (mono variant + field labels)
@@ -1258,6 +1310,10 @@ select {
   line-height: 20px;
   margin: 0;
 }
+
+/* Two controls side by side inside one field (due day + annual month) */
+.field__row { display: flex; gap: 6px; align-items: center; }
+.input.input--day { width: 52px; flex-shrink: 0; }
 
 /* =========================================================
    SEGMENTED CONTROL
@@ -1291,7 +1347,7 @@ select {
   color: var(--paper-1);
 }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .segment {
     display: flex;
     width: 100%;
@@ -1308,12 +1364,19 @@ select {
   }
 }
 
+/* +/− toggle in the goal adjustment form — keeps its natural width on mobile */
+.segment--sign { width: auto; flex: 0 0 auto; }
+.segment__btn--sign { font-size: 15px; min-width: 40px; height: 32px; }
+
 /* =========================================================
    BADGE variants
    ========================================================= */
 
 .badge--red { background: var(--signal-red-soft); color: var(--signal-red); }
-.badge--paid { background: rgba(47,106,74,0.14); color: #2f6a4a; }
+.badge--paid { background: var(--signal-green-a14); color: var(--signal-green); }
+.badge--xs { font-size: 9px; }
+.badge--sm { font-size: 10px; }
+.badge--faint { opacity: 0.5; }
 
 /* =========================================================
    STAMP — override old absolute position, add variants
@@ -1335,10 +1398,11 @@ select {
   opacity: 0.78;
   color: var(--ink-1);
 }
-.stamp--paid     { color: #2f6a4a; }
+.stamp--paid     { color: var(--signal-green); }
 .stamp--overdue,
 .stamp--danger   { color: var(--signal-red); }
 .stamp--audited  { color: var(--ink-1); }
+.stamp--sm       { font-size: 10px; padding: 2px 7px; letter-spacing: 0.12em; }
 
 /* =========================================================
    LEDGER TABLE (new class names)
@@ -1445,6 +1509,43 @@ select {
   border-bottom: 1.5px solid var(--ink-1);
 }
 
+/* Sheet that hosts a ledger table: heading block on top, table flush to the sheet edges */
+.table-card { padding-top: 20px; padding-bottom: 0; }
+.table-card__head { padding: 0 28px; }
+.table-card__title { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.table-card__actions { display: flex; align-items: center; gap: var(--space-2); }
+.ledger-table-wrap--flush { border-radius: 0; }
+
+/* Column widths — table-layout: fixed reads them from the header cells */
+.ledger-table--bills th:nth-child(1) { width: 28%; }
+.ledger-table--bills th:nth-child(2),
+.ledger-table--bills th:nth-child(3),
+.ledger-table--bills th:nth-child(4),
+.ledger-table--bills th:nth-child(5) { width: 16%; }
+.ledger-table--income th:nth-child(1) { width: 30%; }
+.ledger-table--income th:nth-child(2),
+.ledger-table--income th:nth-child(3) { width: 20%; }
+.ledger-table--income th:nth-child(4) { width: 25%; }
+.ledger-table--budget th:nth-child(1) { width: 50%; }
+.ledger-table--budget th:nth-child(2),
+.ledger-table--budget th:nth-child(3) { width: 22%; }
+.ledger-table--goals th:nth-child(1) { width: 24%; }
+.ledger-table--goals th:nth-child(2) { width: 9%; }
+.ledger-table--goals th:nth-child(3) { width: 11%; }
+.ledger-table--goals th:nth-child(4) { width: 10%; }
+.ledger-table--goals th:nth-child(5) { width: 38%; }
+.ledger-table--goals th:nth-child(6) { width: 8%; }
+.ledger-table--onb-bills th:nth-child(1) { width: 32%; }
+.ledger-table--onb-bills th:nth-child(2) { width: 16%; }
+.ledger-table--onb-bills th:nth-child(3) { width: 22%; }
+.ledger-table--onb-bills th:nth-child(4) { width: 26%; }
+.ledger-table--onb-categories th:nth-child(1),
+.ledger-table--onb-goals th:nth-child(1) { width: 45%; }
+.ledger-table--onb-categories th:nth-child(2),
+.ledger-table--onb-categories th:nth-child(3),
+.ledger-table--onb-goals th:nth-child(2),
+.ledger-table--onb-goals th:nth-child(3) { width: 25%; }
+
 /* =========================================================
    RECENT LIST (new class names)
    ========================================================= */
@@ -1487,6 +1588,18 @@ select {
 
 .recent-item--paid { color: var(--ink-3); }
 .recent-item--paid .recent-item__name { text-decoration: line-through; }
+.recent-item--faint { opacity: 0.55; }
+.recent-item--total { margin-top: var(--space-1); opacity: 0.6; }
+.recent-item__name--italic { font-style: italic; }
+
+/* Left / right clusters inside a row */
+.recent-item__group { display: flex; align-items: center; gap: var(--space-2); }
+.recent-item__group--wide { gap: var(--space-3); }
+
+/* Paid / applied checkbox */
+.recent-item__check { cursor: pointer; }
+.recent-item__check--locked { cursor: default; opacity: 0.5; }
+.recent-item__check--nolink { cursor: not-allowed; opacity: 0.4; }
 
 /* =========================================================
    PERIOD GRID + PERIOD CARD
@@ -1499,7 +1612,7 @@ select {
   min-width: 0;
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .period-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -1508,7 +1621,7 @@ select {
   position: relative;
 }
 
-@media (max-width: 720px) {
+@media (width <= 600px) {
   .period-card { padding: 18px 20px 20px 20px; }
 }
 
@@ -1567,16 +1680,16 @@ select {
   cursor: pointer;
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  background: rgba(43,42,38,0.04);
+  background: var(--ink-a04);
   border: 2px solid transparent;
   transition: background 100ms;
   text-align: left;
   width: 100%;
   min-width: 0;
 }
-.period-card__tab:hover { background: rgba(43,42,38,0.08); }
+.period-card__tab:hover { background: var(--ink-a08); }
 .period-card__tab--active {
-  background: rgba(43,42,38,0.10) !important;
+  background: var(--ink-a10) !important;
   border-color: var(--ink-1);
 }
 .period-card__tab:focus-visible {
@@ -1584,7 +1697,7 @@ select {
   outline-offset: 2px;
 }
 
-@media (max-width: 480px) {
+@media (width <= 420px) {
   .recent-item {
     align-items: flex-start;
     flex-wrap: wrap;
@@ -1606,7 +1719,7 @@ select {
   padding: 20px 28px 22px 28px;
 }
 
-@media (max-width: 720px) {
+@media (width <= 600px) {
   .page-head { padding: 18px 20px 18px 20px; }
 }
 
@@ -1693,7 +1806,7 @@ select {
   padding: 4px 10px 4px 8px;
   border: 1px solid var(--border-soft);
   border-radius: 999px;
-  background: rgba(43, 42, 38, 0.04);
+  background: var(--ink-a04);
   list-style: none;
   user-select: none;
   width: fit-content;
@@ -1708,7 +1821,7 @@ select {
 }
 
 .cycle-info > summary:hover {
-  background: rgba(43, 42, 38, 0.10);
+  background: var(--ink-a10);
   color: var(--ink-1);
 }
 
@@ -1735,7 +1848,7 @@ select {
   align-items: baseline;
 }
 
-@media (max-width: 480px) {
+@media (width <= 420px) {
   .cycle-info__list > div { grid-template-columns: 1fr; gap: 2px; }
 }
 
@@ -1774,7 +1887,7 @@ select {
   position: relative;
 }
 
-@media (max-width: 720px) {
+@media (width <= 600px) {
   .onboarding-card { padding: 28px 24px 28px 24px; }
 }
 
@@ -1823,11 +1936,25 @@ select {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(43,42,38,0.18);
+  background: var(--ink-a18);
 }
 
 .onboarding-step-dot--active { background: var(--ink-1); }
-.onboarding-step-dot--done  { background: rgba(43,42,38,0.55); }
+.onboarding-step-dot--done  { background: var(--ink-a55); }
+
+.onboarding-step { display: inline-flex; align-items: center; gap: var(--space-1); }
+.onboarding-step__label { color: var(--ink-3); }
+.onboarding-step__label--active { color: var(--ink-1); }
+.onboarding-step__sep { color: var(--ink-4); margin: 0 6px; }
+
+/* Step copy spacing inside the card */
+.onboarding-title { margin-bottom: 10px; }
+.onboarding-lead { margin-bottom: var(--space-5); }
+.onboarding-lead--tight { margin-bottom: var(--space-2); }
+.onboarding-hint { margin-bottom: var(--space-5); }
+.onboarding-form { display: grid; gap: 18px; }
+.onboarding-add-row { width: 100%; justify-content: flex-end; margin-bottom: var(--space-2); }
+.onboarding-nav { margin-top: var(--space-6); }
 
 /* =========================================================
    BILLS CALENDAR
@@ -1837,8 +1964,8 @@ select {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 1px;
-  background: rgba(43,42,38,0.08);
-  border: 1px solid rgba(43,42,38,0.10);
+  background: var(--ink-a08);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -1893,22 +2020,19 @@ select {
   line-height: 14px;
   padding: 2px 5px;
   border-radius: 3px;
-  background: rgba(43,42,38,0.06);
+  background: var(--ink-a06);
   color: var(--ink-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.calendar__entry--paid { background: rgba(47,106,74,0.10); color: #2f6a4a; text-decoration: line-through; }
+.calendar__entry--paid { background: var(--signal-green-a10); color: var(--signal-green); text-decoration: line-through; }
 .calendar__entry--overdue { background: var(--signal-red-soft); color: var(--signal-red); font-weight: 500; }
-.calendar__entry--income { background: rgba(43,42,38,0.10); color: var(--ink-1); font-family: var(--font-numerals); font-size: 11px; font-weight: 500; }
+.calendar__entry--income { background: var(--ink-a10); color: var(--ink-1); font-family: var(--font-numerals); font-size: 11px; font-weight: 500; }
 
-@media (max-width: 720px) {
-  .calendar__day { min-height: 56px; padding: 4px 5px; }
-  .calendar__entry { font-size: 10px; padding: 1px 4px; }
-  .calendar__num { font-size: 11px; }
-}
+/* Sheet that hosts the calendar / agenda */
+.calendar-card { padding: 20px 24px; }
 
 /* =========================================================
    PAYCHECK TIMELINE
@@ -1922,12 +2046,13 @@ select {
 .timeline__rail {
   position: relative;
   height: 2px;
-  background: rgba(43,42,38,0.18);
+  background: var(--ink-a18);
   margin: 0 14px;
 }
 
 .timeline__tick {
   position: absolute;
+  left: var(--pos);
   top: -6px;
   width: 14px;
   height: 14px;
@@ -1939,10 +2064,11 @@ select {
 
 .timeline__tick--income { background: var(--ink-1); }
 .timeline__tick--bill   { background: var(--paper-1); border-color: var(--signal-red); }
-.timeline__tick--paid   { background: rgba(47,106,74,0.6); border-color: #2f6a4a; }
+.timeline__tick--paid   { background: var(--signal-green-a60); border-color: var(--signal-green); }
 
 .timeline__lbl {
   position: absolute;
+  left: var(--pos);
   top: 14px;
   font-family: var(--font-stamp);
   font-size: 9px;
@@ -1973,9 +2099,63 @@ select {
   vertical-align: middle;
 }
 
+.timeline__legend-dot--income { background: var(--ink-1); }
+.timeline__legend-dot--bill { background: var(--paper-1); border: 2px solid var(--signal-red); }
+.timeline__legend-dot--paid { background: var(--signal-green-a60); }
+.timeline__legend--inline { margin-top: 0; }
+
+/* Today marker on the rail; --pos is the day's percentage along the month */
+.timeline__today {
+  position: absolute;
+  left: var(--pos);
+  top: -8px;
+  width: 1.5px;
+  height: 24px;
+  background: var(--signal-red);
+  transform: translateX(-50%);
+  opacity: 0.6;
+}
+
+/* Sheet that hosts the timeline, and the end-of-month figure under it */
+.timeline-card { padding: 20px 28px 24px; }
+.timeline__balance {
+  font-family: var(--font-numerals);
+  font-size: 22px;
+  margin-top: 2px;
+  color: var(--ink-1);
+}
+
 /* =========================================================
    ALLOCATION RING + BARS
    ========================================================= */
+
+.ring-card { padding: 24px 28px; }
+
+/* Donut: --swatch on each segment carries its category colour */
+.ring { position: relative; width: 200px; height: 200px; }
+.ring__svg { transform: rotate(-90deg); }
+.ring__segment { stroke: var(--swatch); transition: stroke-dasharray 300ms; }
+.ring__center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.ring__label {
+  font-family: var(--font-display);
+  font-size: 32px;
+  line-height: 1;
+  color: var(--ink-1);
+}
+.ring__sublabel {
+  font-family: var(--font-stamp);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--ink-3);
+  margin-top: var(--space-1);
+  text-transform: uppercase;
+}
 
 .ring-wrap {
   display: grid;
@@ -1984,7 +2164,7 @@ select {
   align-items: center;
 }
 
-@media (max-width: 720px) {
+@media (width <= 600px) {
   .ring-wrap { grid-template-columns: minmax(0, 1fr); }
 
   .allocation-row {
@@ -2027,6 +2207,15 @@ select {
   min-width: 0;
 }
 
+.allocation-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--swatch);
+  flex-shrink: 0;
+  display: inline-block;
+}
+
 .allocation-bar {
   height: 14px;
   background: var(--surface-sunk);
@@ -2037,11 +2226,14 @@ select {
 }
 
 .allocation-bar__fill {
+  width: var(--pct);
   height: 100%;
   background: var(--ink-1);
   position: relative;
 }
 .allocation-bar__fill--over { background: var(--signal-red); }
+/* Category colour from --swatch; declared after --over so it wins, as the former inline style did */
+.allocation-bar__fill--swatch { background: var(--swatch); }
 
 .allocation-name {
   font-family: var(--font-hand);
@@ -2072,7 +2264,7 @@ select {
   gap: 18px;
 }
 
-@media (max-width: 720px) {
+@media (width <= 600px) {
   .settings-grid { grid-template-columns: 1fr; }
 }
 
@@ -2102,10 +2294,8 @@ select {
 /* Mobile-only inline element (matches responsive card-view breakpoint) */
 .mobile-only-inline { display: none; }
 /* Inverse: hidden at the same breakpoint (badges/stamps that would crowd the + Add button) */
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .mobile-hidden { display: none; }
-}
-@media (max-width: 600px) {
   .mobile-only-inline { display: inline-flex; }
 }
 
@@ -2130,17 +2320,13 @@ select {
   gap: 18px;
 }
 
-@media (max-width: 720px) {
-  .goal-cards { grid-template-columns: minmax(0, 1fr); }
-}
-
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .goal-cards { display: none; }
 }
 
 .goal-row-progress { display: none; }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .ledger-table--responsive .goal-row-progress {
     display: flex;
     flex-direction: column;
@@ -2195,10 +2381,14 @@ select {
 }
 
 .goal-progress-bar__fill {
+  width: var(--pct);
   height: 100%;
   border-radius: inherit;
+  background: var(--ink-1);
   transition: width 300ms ease;
 }
+.goal-progress-bar__fill--debt { background: var(--signal-red); }
+.goal-progress-bar__fill--done { background: var(--signal-green); }
 
 .goal-card__amounts {
   display: flex;
@@ -2241,6 +2431,60 @@ select {
   margin-top: 2px;
 }
 
+.goal-card__heading { min-width: 0; }
+.goal-card__actions { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
+.goal-card__target { text-align: right; }
+.goal-card__remaining { font-family: var(--font-hand); font-size: 14px; color: var(--ink-3); }
+
+/* Linked-to badges (goal card footer + goals table) */
+.goal-links { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.goal-links__none { font-size: 11px; color: var(--ink-4); font-style: italic; }
+
+/* Empty state when there are no goals */
+.goals-empty { padding: 28px; }
+.goals-empty__text { color: var(--ink-3); font-style: italic; margin-top: var(--space-1); }
+
+/* Goals table row actions + expanded editor row */
+.goal-row__actions { display: flex; gap: var(--space-1); justify-content: center; }
+.goal-row__edit { font-size: 11px; padding: 2px 7px; font-weight: 600; }
+.goal-row__edit--active { color: var(--ink-1); }
+.ledger-table td.goal-row__editor-cell {
+  background: var(--surface-sunk);
+  padding: 14px 18px;
+  border-top: 1px dashed var(--border-soft);
+}
+
+/* Link checkboxes (goal editor + add-goal form) */
+.link-check-list { display: flex; flex-wrap: wrap; gap: var(--space-1) 20px; }
+.link-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+.link-check__box { flex-shrink: 0; }
+
+/* Goal editor (expanded table row on desktop, bottom sheet on mobile) */
+.goal-editor__kicker { margin-bottom: var(--space-2); }
+.goal-editor__links { margin-bottom: var(--space-4); }
+.goal-editor__empty { font-size: 12px; color: var(--ink-4); font-style: italic; }
+.goal-editor__adj-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: var(--space-3); }
+.goal-editor__adj-list--more { margin-bottom: 6px; }
+.goal-editor__adj-list--scroll { max-height: 180px; overflow-y: auto; }
+.goal-editor__adj { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.goal-editor__adj-date { color: var(--ink-4); font-size: 12px; min-width: 52px; flex-shrink: 0; }
+.goal-editor__adj-amount { font-family: var(--font-numerals); min-width: 90px; color: var(--ink-1); }
+.goal-editor__adj-amount--neg { color: var(--signal-red); }
+.goal-editor__adj-note { color: var(--ink-3); font-style: italic; }
+.goal-editor__adj-note--empty { color: var(--ink-4); }
+.goal-editor__adj-remove { margin-left: auto; flex-shrink: 0; }
+.goal-editor__toggle { font-size: 12px; padding: 2px 8px; margin-bottom: var(--space-3); }
+.goal-editor__none { color: var(--ink-4); font-style: italic; font-size: 13px; margin-bottom: 10px; }
+.goal-editor__amount-row { display: flex; gap: var(--space-2); align-items: center; }
+.goal-editor__amount-input { flex: 1; min-width: 0; }
+
 /* Goals inside period card */
 .goal-period-item {
   display: grid;
@@ -2276,6 +2520,18 @@ select {
   margin: 0 0 0 28px;
 }
 
+.goal-period-item__fill { width: var(--pct); background: var(--ink-1); }
+.goal-period-item__fill--debt { background: var(--signal-red); }
+.goal-period-item__fill--done { background: var(--signal-green); }
+.goal-period-item__nolink {
+  font-family: var(--font-stamp);
+  font-size: 10px;
+  color: var(--ink-4);
+  letter-spacing: 0.12em;
+}
+/* A locked goal checkbox is dimmed a touch more than a locked bill checkbox */
+.goal-period-item .recent-item__check--locked { opacity: 0.4; }
+
 /* 4-column variant for period card inline stats */
 .period-card__goals-tab {
   all: unset;
@@ -2287,14 +2543,14 @@ select {
   width: 100%;
   padding: 7px 12px;
   border-radius: var(--radius-md);
-  background: rgba(43,42,38,0.04);
+  background: var(--ink-a04);
   border: 2px solid transparent;
   cursor: pointer;
   transition: background 100ms;
 }
-.period-card__goals-tab:hover { background: rgba(43,42,38,0.08); }
+.period-card__goals-tab:hover { background: var(--ink-a08); }
 .period-card__goals-tab--active {
-  background: rgba(43,42,38,0.10) !important;
+  background: var(--ink-a10) !important;
   border-color: var(--ink-1);
 }
 .period-card__goals-tab:focus-visible {
@@ -2332,7 +2588,7 @@ select {
 /* 5 data fields + button (e.g. expenses annual) */
 .inline-form--5col { grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto; }
 
-@media (max-width: 720px) {
+@media (width <= 900px) {
   .inline-form,
   .inline-form--2col,
   .inline-form--4col,
@@ -2347,7 +2603,7 @@ select {
   .ledger-table-wrap { padding: 0 16px 0 52px; }
 }
 
-@media (max-width: 480px) {
+@media (width <= 600px) {
   .inline-form,
   .inline-form--2col,
   .inline-form--4col,
@@ -2355,9 +2611,27 @@ select {
     grid-template-columns: 1fr;
     padding: 14px 16px 16px;
   }
-  /* .page-head          { padding: 16px 16px 16px 16px; } */
-  .period-card        { padding: 16px 16px 18px 16px; }
 }
+
+@media (width <= 420px) {
+  .period-card { padding: 16px 16px 18px 16px; }
+}
+
+/* =========================================================
+   ADD GOAL FORM — three stacked blocks on the sunk paper
+   (fields grid, optional link checkboxes, full-width button)
+   ========================================================= */
+
+.inline-form--goal { border-radius: 0; padding-bottom: var(--space-3); }
+.add-goal__links { background: var(--surface-sunk); padding: 0 24px 12px; }
+.add-goal__links--sheet { background: transparent; padding: 12px 0 0; }
+.add-goal__links-label { margin-bottom: 6px; }
+.add-goal__submit {
+  background: var(--surface-sunk);
+  padding: 8px 24px 18px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.add-goal__submit--sheet { background: transparent; padding: 14px 0 0; border-radius: 0; }
 
 /* =========================================================
    EMPTY STATE (Overview)
@@ -2369,7 +2643,7 @@ select {
   gap: 16px;
 }
 
-@media (max-width: 720px) {
+@media (width <= 600px) {
   .empty-state { padding: 20px 20px 24px; }
 }
 
@@ -2452,7 +2726,7 @@ select {
   font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #2f6a4a;
+  color: var(--signal-green);
   opacity: 0;
   transition: opacity 180ms ease;
   pointer-events: none;
@@ -2481,7 +2755,7 @@ select {
   padding: 0 12px;
 }
 
-@media (min-width: 721px) {
+@media (width > 900px) {
   .undo-toast-wrap { bottom: 28px; }
 }
 
@@ -2519,10 +2793,10 @@ select {
   padding: 4px 8px;
   border-radius: 3px;
   cursor: pointer;
-  border: 1px solid rgba(251, 246, 233, 0.35);
+  border: 1px solid var(--paper-a35);
 }
 
-.undo-toast__btn:hover { background: rgba(251, 246, 233, 0.10); }
+.undo-toast__btn:hover { background: var(--paper-a10); }
 .undo-toast__btn:focus-visible {
   outline: 2px solid var(--paper-1);
   outline-offset: 2px;
@@ -2550,7 +2824,7 @@ select {
    have `data-label="…"` on each <td> for headings to appear.
    ========================================================= */
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .ledger-table-wrap-no-line:has(.ledger-table--responsive) {
     padding: 0;
     overflow: visible;
@@ -2625,7 +2899,7 @@ select {
     width: auto;
   }
   .ledger-table--responsive td.text-tight .btn--icon {
-    background: rgba(182, 48, 31, 0.10);
+    background: var(--signal-red-a10);
     color: var(--signal-red);
     width: 36px;
     height: 36px;
@@ -2636,7 +2910,7 @@ select {
     justify-content: center;
   }
   .ledger-table--responsive td.text-tight .btn--icon:hover {
-    background: rgba(182, 48, 31, 0.18);
+    background: var(--signal-red-a18);
     color: var(--signal-red);
   }
   .ledger-table--responsive td.text-tight::before { display: none; }
@@ -2689,7 +2963,7 @@ select {
 
 .calendar-agenda { display: none; }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .calendar-desktop { display: none; }
   .calendar-agenda { display: block; }
 }
@@ -2786,7 +3060,7 @@ select {
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: rgba(43, 42, 38, 0.45);
+  background: var(--ink-a45);
   display: grid;
   place-items: center;
   padding: 16px;
@@ -2889,9 +3163,11 @@ select {
   overflow-y: auto;
 }
 
-/* Add-row forms rendered inside the sheet lose their sunk-paper chrome
+/* Add-row forms rendered inside the sheet lose their sunk-paper chrome;
+   --bare is the same thing for forms embedded elsewhere (goal editor row)
    (declared after the .inline-form media queries so it wins the cascade) */
-.inline-form--sheet {
+.inline-form--sheet,
+.inline-form--bare {
   background: transparent;
   border-radius: 0;
   padding: 0;
@@ -2914,7 +3190,20 @@ select {
   flex-wrap: wrap;
 }
 
-@media (max-width: 600px) {
+/* Month heading beside the controls (Overview) */
+.month-title { display: flex; align-items: center; gap: 10px; }
+.month-title__label {
+  font-family: var(--font-display);
+  font-size: 32px;
+  line-height: 1.1;
+  color: var(--ink-1);
+}
+.month-note { margin-top: var(--space-2); font-style: italic; font-size: 13px; }
+
+/* Month label between ‹ › buttons (Expenses) */
+.month-nav__label { font-family: var(--font-display); font-size: 24px; color: var(--ink-1); }
+
+@media (width <= 600px) {
   .month-controls {
     width: 100%;
     justify-content: space-between;
@@ -2947,19 +3236,20 @@ select {
 .period-card__paid-bar {
   flex: 1;
   height: 4px;
-  background: rgba(43, 42, 38, 0.08);
+  background: var(--ink-a08);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .period-card__paid-bar__fill {
+  width: var(--pct);
   height: 100%;
-  background: #2f6a4a;
+  background: var(--signal-green);
   transition: width 200ms ease;
 }
 
 .period-card__paid-bar__fill--all {
-  background: #2f6a4a;
+  background: var(--signal-green);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2986,13 +3276,19 @@ select {
 
 .skeleton {
   display: inline-block;
-  background: rgba(43, 42, 38, 0.10);
+  background: var(--ink-a10);
   border-radius: 3px;
   animation: paper-shimmer 1400ms ease-in-out infinite;
 }
 
 .skeleton--line { height: 14px; width: 100%; }
 .skeleton--row  { height: 28px; width: 100%; margin: 6px 0; }
+.skeleton--stat-label { width: 90px; }
+.skeleton--stat-value { height: 26px; width: 140px; }
+.skeleton-gap { margin-top: var(--space-2); }
+
+/* Sheet holding placeholder rows while a page loads */
+.skeleton-card { padding: 20px 28px; }
 
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; opacity: 0.7; }

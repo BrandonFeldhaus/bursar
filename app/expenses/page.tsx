@@ -258,7 +258,7 @@ export default function ExpensesPage() {
           <h1 className="page-head__title">Bill notations</h1>
           <p className="page-head__lead">Loading your bill register…</p>
         </header>
-        <div className="sheet" style={{ padding: "20px 28px" }} aria-hidden="true">
+        <div className="sheet skeleton-card" aria-hidden="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="skeleton skeleton--row" />
           ))}
@@ -280,15 +280,15 @@ export default function ExpensesPage() {
 
       {/* Stats row */}
       <div className="stat-row">
-        <article className="sheet stat stat--accent" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat stat--accent sheet--stat">
           <div className="stat__label">Monthly obligations</div>
           <div className="stat__value">{moneyFmt(totals.totalMonthly)}</div>
         </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Monthly income</div>
           <div className="stat__value">{moneyFmt(totals.monthlyIncome)}</div>
         </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">{balanced ? "Cushion" : "Shortfall"}</div>
           <div className={`stat__value${!balanced ? " stat__value--neg" : ""}`}>
             {moneyFmt(Math.abs(totals.monthlyIncome - totals.totalMonthly))}
@@ -300,10 +300,10 @@ export default function ExpensesPage() {
       </div>
 
       {/* View toggle + month nav */}
-      <div className="sheet" style={{ padding: "14px 22px" }}>
+      <div className="sheet sheet--bar">
         <div className="row-between">
           <div className="row gap-sm">
-            <p className="kicker" style={{ margin: 0 }}>View</p>
+            <p className="kicker">View</p>
             <div className="segment" role="radiogroup">
               {(["calendar", "list"] as const).map((v) => (
                 <button
@@ -321,7 +321,7 @@ export default function ExpensesPage() {
           </div>
           <div className="row gap-sm">
             <button className="btn btn--ghost" type="button" onClick={() => setMonth(shiftMonth(month, -1))}>‹</button>
-            <span style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--ink-1)" }}>
+            <span className="month-nav__label">
               {formatMonthLabel(month)}
             </span>
             <button className="btn btn--ghost" type="button" onClick={() => setMonth(shiftMonth(month, 1))}>›</button>
@@ -331,7 +331,7 @@ export default function ExpensesPage() {
 
       {/* Calendar view */}
       {view === "calendar" && (
-        <div className="sheet" style={{ padding: "20px 24px" }}>
+        <div className="sheet calendar-card">
           <p className="kicker">{formatMonthLabel(month)}</p>
           <h2 className="section-title mb-3">Bills due calendar</h2>
           <div className="calendar-desktop">
@@ -344,16 +344,16 @@ export default function ExpensesPage() {
       )}
 
       {/* Bill register table */}
-      <div className="sheet" style={{ paddingTop: "20px", paddingBottom: 0 }}>
-        <div style={{ padding: "0 28px" }} className="row-between mb-3">
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+      <div className="sheet table-card">
+        <div className="table-card__head row-between mb-3">
+          <div className="table-card__title">
             <div>
               <p className="kicker">Recurring entries</p>
               <h2 className="section-title">Bill register</h2>
             </div>
             <SavedIndicator visible={saved.visible} />
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="table-card__actions">
             <button
               type="button"
               className="btn mobile-only-inline btn--jump"
@@ -365,15 +365,15 @@ export default function ExpensesPage() {
           </div>
         </div>
 
-        <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
-          <table className="ledger-table ledger-table--responsive">
+        <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
+          <table className="ledger-table ledger-table--responsive ledger-table--bills">
             <thead>
               <tr>
-                <th style={{ width: "28%" }}>Notation</th>
-                <th className="text-right" style={{ width: "16%" }}>Amount</th>
-                <th style={{ width: "16%" }}>Cadence</th>
-                <th style={{ width: "16%" }}>Due day</th>
-                <th style={{ width: "16%" }}>Annual month</th>
+                <th>Notation</th>
+                <th className="text-right">Amount</th>
+                <th>Cadence</th>
+                <th>Due day</th>
+                <th>Annual month</th>
                 <th className="text-tight" />
               </tr>
             </thead>

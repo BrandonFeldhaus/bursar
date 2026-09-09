@@ -1,37 +1,26 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { loadBudget } from "../lib/budgetStorage";
-import { useHydrated } from "../lib/useHydrated";
 
+/**
+ * Redirect-only gate. Sends first-time visitors to /onboarding and finished
+ * users away from it, but never hides its children: every page renders its
+ * own loading skeleton on the server and on the first client frame, so there
+ * is no blank frame while the decision is made. When a redirect fires, the
+ * skeleton (or page) is simply replaced by the destination route.
+ */
 export function OnboardingGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const hydrated = useHydrated();
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!hydrated) return;
-    const state = loadBudget();
-    const complete = !!state?.meta?.onboardingComplete;
+    const complete = !!loadBudget()?.meta?.onboardingComplete;
     const onOnboarding = pathname === "/onboarding";
+    if (!complete && !onOnboarding) router.replace("/onboarding");
+    else if (complete && onOnboarding) router.replace("/");
+  }, [pathname, router]);
 
-    if (!complete && !onOnboarding) {
-      setReady(false);
-      router.replace("/onboarding");
-      return;
-    }
-
-    if (complete && onOnboarding) {
-      setReady(false);
-      router.replace("/");
-      return;
-    }
-
-    setReady(true);
-  }, [hydrated, pathname, router]);
-
-  if (!hydrated || !ready) return null;
   return <>{children}</>;
 }

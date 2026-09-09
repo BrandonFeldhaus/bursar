@@ -38,14 +38,9 @@ export function AddGoalForm({
   inSheet?: boolean;
 }) {
   const hasLinkable = budgetCategories.length > 0 || recurringExpenses.length > 0;
-  const sunkStyle = { background: "var(--surface-sunk)" } as const;
   return (
     <>
-      <div
-        id={formId}
-        className={`inline-form inline-form--3col${inSheet ? " inline-form--sheet" : ""}`}
-        style={inSheet ? undefined : { ...sunkStyle, borderRadius: 0, paddingBottom: 12 }}
-      >
+      <div id={formId} className={`inline-form inline-form--3col${inSheet ? " inline-form--sheet" : " inline-form--goal"}`}>
         <div className="field">
           <label className="field__label">Goal name</label>
           <input
@@ -84,19 +79,18 @@ export function AddGoalForm({
             }
             onKeyDown={(e) => e.key === "Enter" && onAdd()}
             pattern="[0-9.]*"
-            style={{ textAlign: "left" }}
           />
           {attempted && draft.targetAmount <= 0 && <p className="field__error">Must be more than 0</p>}
         </div>
       </div>
       {hasLinkable && (
-        <div style={inSheet ? { padding: "12px 0 0" } : { ...sunkStyle, padding: "0 24px 12px" }}>
-          <p className="field__label" style={{ marginBottom: 6 }}>Link to</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 20px" }}>
+        <div className={`add-goal__links${inSheet ? " add-goal__links--sheet" : ""}`}>
+          <p className="field__label add-goal__links-label">Link to</p>
+          <div className="link-check-list">
             {budgetCategories.map((c) => {
               const checked = draft.linkedBudgetCategoryIds.includes(c.id);
               return (
-                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
+                <label key={c.id} className="link-check">
                   <input
                     type="checkbox"
                     checked={checked}
@@ -108,7 +102,7 @@ export function AddGoalForm({
                           : [...d.linkedBudgetCategoryIds, c.id],
                       }))
                     }
-                    style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
+                    className="link-check__box"
                   />
                   {c.name}
                 </label>
@@ -117,7 +111,7 @@ export function AddGoalForm({
             {recurringExpenses.map((e) => {
               const checked = draft.linkedExpenseIds.includes(e.id);
               return (
-                <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
+                <label key={e.id} className="link-check">
                   <input
                     type="checkbox"
                     checked={checked}
@@ -129,7 +123,7 @@ export function AddGoalForm({
                           : [...d.linkedExpenseIds, e.id],
                       }))
                     }
-                    style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
+                    className="link-check__box"
                   />
                   {e.name}
                 </label>
@@ -138,13 +132,8 @@ export function AddGoalForm({
           </div>
         </div>
       )}
-      <div style={inSheet ? { padding: "14px 0 0" } : { ...sunkStyle, padding: "8px 24px 18px", borderRadius: "0 0 var(--radius-lg) var(--radius-lg)" }}>
-        <button
-          className="btn"
-          type="button"
-          onClick={onAdd}
-          style={{ width: "100%" }}
-        >
+      <div className={`add-goal__submit${inSheet ? " add-goal__submit--sheet" : ""}`}>
+        <button className="btn btn--block" type="button" onClick={onAdd}>
           Add goal
         </button>
       </div>

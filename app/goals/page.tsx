@@ -1,6 +1,6 @@
 "use client";
 
-import { type Dispatch, type SetStateAction, Fragment, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type Dispatch, type SetStateAction, Fragment, useEffect, useMemo, useState } from "react";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { loadState, newId, saveState, type BudgetState, type Goal } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
@@ -18,10 +18,10 @@ const RECENT_ADJ_COUNT = 3;
 
 function GoalProgressBar({ pct, type }: { pct: number; type: "savings" | "debt" }) {
   const clamped = Math.min(100, Math.max(0, pct));
-  const color = clamped >= 100 ? "#2f6a4a" : type === "debt" ? "var(--signal-red)" : "var(--ink-1)";
+  const tone = clamped >= 100 ? " goal-progress-bar__fill--done" : type === "debt" ? " goal-progress-bar__fill--debt" : "";
   return (
     <div className="goal-progress-bar">
-      <div className="goal-progress-bar__fill" style={{ width: `${clamped}%`, background: color }} />
+      <div className={`goal-progress-bar__fill${tone}`} style={{ "--pct": `${clamped}%` } as CSSProperties} />
     </div>
   );
 }
@@ -77,15 +77,15 @@ function GoalEditor({
   return (
     <>
       {/* Links section */}
-      <p className="kicker" style={{ marginBottom: 8 }}>{inSheet ? "Links" : `Links — ${goal.name}`}</p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 20px", marginBottom: 16 }}>
+      <p className="kicker goal-editor__kicker">{inSheet ? "Links" : `Links — ${goal.name}`}</p>
+      <div className="link-check-list goal-editor__links">
         {budgetCategories.length === 0 && recurringExpenses.length === 0 && (
-          <span style={{ fontSize: 12, color: "var(--ink-4)", fontStyle: "italic" }}>No budget categories or bills set up yet.</span>
+          <span className="goal-editor__empty">No budget categories or bills set up yet.</span>
         )}
         {budgetCategories.map((c) => {
           const checked = goal.linkedBudgetCategoryIds.includes(c.id);
           return (
-            <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
+            <label key={c.id} className="link-check">
               <input
                 type="checkbox"
                 checked={checked}
@@ -96,7 +96,7 @@ function GoalEditor({
                       : [...goal.linkedBudgetCategoryIds, c.id],
                   })
                 }
-                style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
+                className="link-check__box"
               />
               {c.name}
             </label>
@@ -105,7 +105,7 @@ function GoalEditor({
         {recurringExpenses.map((e) => {
           const checked = goal.linkedExpenseIds.includes(e.id);
           return (
-            <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
+            <label key={e.id} className="link-check">
               <input
                 type="checkbox"
                 checked={checked}
@@ -116,7 +116,7 @@ function GoalEditor({
                       : [...goal.linkedExpenseIds, e.id],
                   })
                 }
-                style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
+                className="link-check__box"
               />
               {e.name}
             </label>
@@ -124,26 +124,25 @@ function GoalEditor({
         })}
       </div>
       {/* Adjustments section */}
-      <p className="kicker" style={{ marginBottom: 8 }}>Adjustments</p>
+      <p className="kicker goal-editor__kicker">Adjustments</p>
       {sortedAdj.length > 0 ? (
         <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: sortedAdj.length > RECENT_ADJ_COUNT ? 6 : 12, ...(showAllAdj ? { maxHeight: 180, overflowY: "auto" } : {}) }}>
+          <div className={`goal-editor__adj-list${sortedAdj.length > RECENT_ADJ_COUNT ? " goal-editor__adj-list--more" : ""}${showAllAdj ? " goal-editor__adj-list--scroll" : ""}`}>
             {visibleAdj.map((a) => (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-                <span style={{ color: "var(--ink-4)", fontSize: 12, minWidth: 52, flexShrink: 0 }}>
+              <div key={a.id} className="goal-editor__adj">
+                <span className="goal-editor__adj-date">
                   {a.date ? formatAdjustmentDate(a.date) : "—"}
                 </span>
-                <span style={{ fontFamily: "var(--font-numerals)", minWidth: 90, color: a.amount < 0 ? "var(--signal-red)" : "var(--ink-1)" }}>
+                <span className={`goal-editor__adj-amount${a.amount < 0 ? " goal-editor__adj-amount--neg" : ""}`}>
                   {a.amount > 0 ? "+" : ""}{moneyFmt(a.amount)}
                 </span>
                 {a.note
-                  ? <span style={{ color: "var(--ink-3)", fontStyle: "italic" }}>{a.note}</span>
-                  : <span style={{ color: "var(--ink-4)", fontStyle: "italic" }}>—</span>
+                  ? <span className="goal-editor__adj-note">{a.note}</span>
+                  : <span className="goal-editor__adj-note goal-editor__adj-note--empty">—</span>
                 }
                 <button
-                  className="btn btn--icon"
+                  className="btn btn--icon goal-editor__adj-remove"
                   type="button"
-                  style={{ marginLeft: "auto", flexShrink: 0 }}
                   onClick={() => onRemoveAdjustment(a.id)}
                   aria-label="Remove adjustment"
                 >
@@ -154,33 +153,28 @@ function GoalEditor({
           </div>
           {sortedAdj.length > RECENT_ADJ_COUNT && (
             <button
-              className="btn btn--ghost"
+              className="btn btn--ghost goal-editor__toggle"
               type="button"
               onClick={onToggleShowAllAdj}
-              style={{ fontSize: 12, padding: "2px 8px", marginBottom: 12 }}
             >
               {showAllAdj ? "Show recent" : `Show all (${sortedAdj.length})`}
             </button>
           )}
         </>
       ) : (
-        <p style={{ color: "var(--ink-4)", fontStyle: "italic", fontSize: 13, marginBottom: 10 }}>No manual adjustments yet.</p>
+        <p className="goal-editor__none">No manual adjustments yet.</p>
       )}
-      <div
-        className="inline-form inline-form--2col"
-        style={{ padding: 0, background: "transparent", borderRadius: 0 }}
-      >
+      <div className="inline-form inline-form--2col inline-form--bare">
         <div className="field">
           <label className="field__label">Amount</label>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div className="segment" role="radiogroup" aria-label="Add or subtract" style={{ width: "auto", flex: "0 0 auto" }}>
+          <div className="goal-editor__amount-row">
+            <div className="segment segment--sign" role="radiogroup" aria-label="Add or subtract">
               <button
                 type="button"
                 role="radio"
                 aria-checked={adjSign === 1}
                 aria-label="Add to goal"
-                className={`segment__btn${adjSign === 1 ? " segment__btn--active" : ""}`}
-                style={{ fontSize: 15, minWidth: 40, height: 32 }}
+                className={`segment__btn segment__btn--sign${adjSign === 1 ? " segment__btn--active" : ""}`}
                 onClick={() => setAdjSign(1)}
               >
                 +
@@ -190,15 +184,14 @@ function GoalEditor({
                 role="radio"
                 aria-checked={adjSign === -1}
                 aria-label="Subtract from goal"
-                className={`segment__btn${adjSign === -1 ? " segment__btn--active" : ""}`}
-                style={{ fontSize: 15, minWidth: 40, height: 32 }}
+                className={`segment__btn segment__btn--sign${adjSign === -1 ? " segment__btn--active" : ""}`}
                 onClick={() => setAdjSign(-1)}
               >
                 −
               </button>
             </div>
             <input
-              className="input input--mono"
+              className="input input--mono goal-editor__amount-input"
               type="text"
               inputMode="decimal"
               pattern="[0-9.]*"
@@ -211,7 +204,6 @@ function GoalEditor({
                 setAdjAmount(raw.replace(/[^0-9.]/g, ""));
               }}
               onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
-              style={{ flex: 1, minWidth: 0 }}
             />
           </div>
         </div>
@@ -378,7 +370,7 @@ export default function GoalsPage() {
           <h1 className="page-head__title">Goals &amp; Targets</h1>
           <p className="page-head__lead">Loading goals…</p>
         </header>
-        <div className="sheet" style={{ padding: "20px 28px" }} aria-hidden="true">
+        <div className="sheet skeleton-card" aria-hidden="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="skeleton skeleton--row" />
           ))}
@@ -419,11 +411,11 @@ export default function GoalsPage() {
             return (
               <div key={g.id} className="sheet goal-card">
                 <div className="goal-card__head">
-                  <div style={{ minWidth: 0 }}>
+                  <div className="goal-card__heading">
                     <p className="kicker">{g.type === "savings" ? "Savings" : "Debt payoff"}</p>
                     <h3 className="goal-card__title">{g.name}</h3>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <div className="goal-card__actions">
                     {pct >= 100 && <span className="stamp stamp--paid">Done</span>}
                     <button
                       className="btn btn--icon"
@@ -444,24 +436,24 @@ export default function GoalsPage() {
                     <span className="goal-card__amount">{moneyFmt(applied)}</span>
                   </span>
                   <span className="goal-card__pct">{pct.toFixed(0)}%</span>
-                  <span style={{ textAlign: "right" }}>
+                  <span className="goal-card__target">
                     <span className="goal-card__amount-label">Target</span>
                     <span className="goal-card__amount">{moneyFmt(g.targetAmount)}</span>
                   </span>
                 </div>
 
                 <div className="goal-card__footer">
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  <div className="goal-links">
                     {linkedCats.length === 0 && linkedExps.length === 0
-                      ? <span className="badge" style={{ fontSize: 10, opacity: 0.5 }}>No link</span>
+                      ? <span className="badge badge--sm badge--faint">No link</span>
                       : <>
-                          {linkedCats.map((c) => <span key={`cat:${c.id}`} className="badge" style={{ fontSize: 10 }}>{c.name}</span>)}
-                          {linkedExps.map((e) => <span key={`exp:${e.id}`} className="badge" style={{ fontSize: 10 }}>{e.name}</span>)}
+                          {linkedCats.map((c) => <span key={`cat:${c.id}`} className="badge badge--sm">{c.name}</span>)}
+                          {linkedExps.map((e) => <span key={`exp:${e.id}`} className="badge badge--sm">{e.name}</span>)}
                         </>
                     }
                   </div>
                   {remaining > 0 && (
-                    <span style={{ fontFamily: "var(--font-hand)", fontSize: 14, color: "var(--ink-3)" }}>
+                    <span className="goal-card__remaining">
                       {moneyFmt(remaining)} to go
                     </span>
                   )}
@@ -473,9 +465,9 @@ export default function GoalsPage() {
       )}
 
       {goals.length === 0 && (
-        <div className="sheet" style={{ padding: "28px 28px" }}>
+        <div className="sheet goals-empty">
           <p className="kicker">No goals yet</p>
-          <p style={{ color: "var(--ink-3)", fontStyle: "italic", marginTop: 4 }}>
+          <p className="goals-empty__text">
             Add a savings or debt payoff goal below to start tracking your progress.
           </p>
         </div>
@@ -483,8 +475,8 @@ export default function GoalsPage() {
 
       {/* Management table */}
       {goals.length > 0 && (
-        <div className="sheet" style={{ paddingTop: "20px", paddingBottom: 0 }}>
-          <div style={{ padding: "0 28px" }} className="row-between mb-3">
+        <div className="sheet table-card">
+          <div className="table-card__head row-between mb-3">
             <div>
               <p className="kicker">Manage</p>
               <h2 className="section-title">All goals</h2>
@@ -497,16 +489,16 @@ export default function GoalsPage() {
               <IconPlus size={12} aria-hidden="true" />Add goal
             </button>
           </div>
-          <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
-            <table className="ledger-table ledger-table--responsive">
+          <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
+            <table className="ledger-table ledger-table--responsive ledger-table--goals">
               <thead>
                 <tr>
-                  <th style={{ width: "24%" }}>Goal</th>
-                  <th style={{ width: "9%" }}>Type</th>
-                  <th className="text-right" style={{ width: "11%" }}>Target</th>
-                  <th style={{ width: "10%" }}>Applied</th>
-                  <th style={{ width: "38%" }}>Linked to</th>
-                  <th className="text-tight" style={{ width: "8%" }} />
+                  <th>Goal</th>
+                  <th>Type</th>
+                  <th className="text-right">Target</th>
+                  <th>Applied</th>
+                  <th>Linked to</th>
+                  <th className="text-tight" />
                 </tr>
               </thead>
               <tbody>
@@ -557,24 +549,24 @@ export default function GoalsPage() {
                         </td>
                         <td className="mono" data-label="Applied">{moneyFmt(applied)}</td>
                         <td data-label="Linked to">
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                          <div className="goal-links">
                             {g.linkedBudgetCategoryIds.map((id) => {
                               const cat = budgetCategories.find((c) => c.id === id);
-                              return cat ? <span key={id} className="badge" style={{ fontSize: 10 }}>{cat.name}</span> : null;
+                              return cat ? <span key={id} className="badge badge--sm">{cat.name}</span> : null;
                             })}
                             {g.linkedExpenseIds.map((id) => {
                               const exp = recurringExpenses.find((e) => e.id === id);
-                              return exp ? <span key={id} className="badge" style={{ fontSize: 10 }}>{exp.name}</span> : null;
+                              return exp ? <span key={id} className="badge badge--sm">{exp.name}</span> : null;
                             })}
                             {g.linkedBudgetCategoryIds.length === 0 && g.linkedExpenseIds.length === 0 && (
-                              <span style={{ fontSize: 11, color: "var(--ink-4)", fontStyle: "italic" }}>None</span>
+                              <span className="goal-links__none">None</span>
                             )}
                           </div>
                         </td>
-                        <td className="text-tight" style={{ verticalAlign: "middle" }}>
-                          <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <td className="text-tight">
+                          <div className="goal-row__actions">
                             <button
-                              className="btn btn--ghost"
+                              className={`btn btn--ghost goal-row__edit${isExpanded ? " goal-row__edit--active" : ""}`}
                               type="button"
                               title="Edit links &amp; adjustments"
                               aria-label={`Edit ${g.name}`}
@@ -585,7 +577,6 @@ export default function GoalsPage() {
                                 setAdjNote("");
                                 setAdjShowAll(false);
                               }}
-                              style={{ fontSize: 11, padding: "2px 7px", fontWeight: 600, color: isExpanded ? "var(--ink-1)" : undefined }}
                             >
                               Edit
                             </button>
@@ -602,7 +593,7 @@ export default function GoalsPage() {
                       </tr>
                       {isExpanded && !isMobile && (
                         <tr>
-                          <td colSpan={6} style={{ background: "var(--surface-sunk)", padding: "14px 18px", borderTop: "1px dashed var(--border-soft)" }}>
+                          <td colSpan={6} className="goal-row__editor-cell">
                             <GoalEditor
                               goal={g}
                               budgetCategories={budgetCategories}
@@ -636,8 +627,8 @@ export default function GoalsPage() {
 
       {/* Add form when no goals yet */}
       {goals.length === 0 && (
-        <div className="sheet" style={{ paddingTop: "20px", paddingBottom: 0 }}>
-          <div style={{ padding: "0 28px" }} className="mb-3">
+        <div className="sheet table-card">
+          <div className="table-card__head mb-3">
             <p className="kicker">New goal</p>
             <h2 className="section-title">Add your first goal</h2>
           </div>

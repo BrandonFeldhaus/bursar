@@ -51,13 +51,12 @@ export function AddBillForm({
   const dueDayInput = (
     <input
       id="bill-draft-day"
-      className="input input--mono"
+      className={`input input--mono${combinedDue ? " input--day" : ""}`}
       type="text"
       inputMode="numeric"
       pattern="[0-9]*"
       placeholder="1"
       value={draft.dueDay || ""}
-      style={combinedDue ? { width: "52px", flexShrink: 0 } : undefined}
       onChange={(e) => {
         const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
         const n = digits === "" ? 0 : Math.min(31, Number(digits));
@@ -129,7 +128,7 @@ export function AddBillForm({
           <label className="field__label" htmlFor="bill-draft-day">
             Due{draft.cadence === "annual" ? " day / month" : " day"}
           </label>
-          <div style={{ display: "flex", gap: 6 }}>
+          <div className="field__row">
             {dueDayInput}
             {draft.cadence === "annual" && monthSelect}
           </div>

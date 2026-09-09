@@ -224,7 +224,7 @@ export default function IncomePage() {
           <h1 className="page-head__title">Income ledger</h1>
           <p className="page-head__lead">Loading income entries…</p>
         </header>
-        <div className="sheet" style={{ padding: "20px 28px" }} aria-hidden="true">
+        <div className="sheet skeleton-card" aria-hidden="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="skeleton skeleton--row" />
           ))}
@@ -267,35 +267,35 @@ export default function IncomePage() {
 
       {/* Stats row */}
       <div className="stat-row stat-row--4">
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Monthly income</div>
           <div className="stat__value">{moneyFmt(monthly)}</div>
         </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Weekly sources</div>
           <div className="stat__value">{weeklyCount}</div>
         </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Bi-weekly sources</div>
           <div className="stat__value">{biweeklyCount}</div>
         </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Semi-monthly sources</div>
           <div className="stat__value">{semiCount}</div>
         </article>
       </div>
 
       {/* Ledger table */}
-      <div className="sheet" style={{ paddingTop: "20px", paddingBottom: 0 }}>
-        <div style={{ padding: "0 28px" }} className="row-between mb-3">
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+      <div className="sheet table-card">
+        <div className="table-card__head row-between mb-3">
+          <div className="table-card__title">
             <div>
               <p className="kicker">Sources</p>
               <h2 className="section-title">All inflow lines</h2>
             </div>
             <SavedIndicator visible={saved.visible} />
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="table-card__actions">
             <button
               type="button"
               className="btn mobile-only-inline btn--jump"
@@ -307,14 +307,14 @@ export default function IncomePage() {
           </div>
         </div>
 
-        <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
-          <table className="ledger-table ledger-table--responsive">
+        <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
+          <table className="ledger-table ledger-table--responsive ledger-table--income">
             <thead>
               <tr>
-                <th style={{ width: "30%" }}>Source</th>
-                <th className="text-right" style={{ width: "20%" }}>Amount</th>
-                <th style={{ width: "20%" }}>Cycle</th>
-                <th style={{ width: "25%" }}>Anchor / Days</th>
+                <th>Source</th>
+                <th className="text-right">Amount</th>
+                <th>Cycle</th>
+                <th>Anchor / Days</th>
                 <th className="text-tight" />
               </tr>
             </thead>
@@ -370,7 +370,7 @@ export default function IncomePage() {
                         onChange={(e) => update(inc.id, { lastPaycheckDate: e.target.value })}
                       />
                     ) : (
-                      <span className="muted" style={{ fontStyle: "italic" }}>1st &amp; 15th</span>
+                      <span className="muted muted--italic">1st &amp; 15th</span>
                     )}
                   </td>
                   <td className="text-tight">
