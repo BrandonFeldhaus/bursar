@@ -1109,17 +1109,24 @@ select {
   grid-template-columns: repeat(4, 1fr);
 }
 
+.stat-row--5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
 @media (max-width: 900px) {
   .stat-row--4 { grid-template-columns: repeat(2, 1fr); }
+  .stat-row--5 { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 720px) {
   .stat-row { grid-template-columns: 1fr; gap: 10px; }
-  .stat-row--4 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-row--4,
+  .stat-row--5 { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 }
 
 @media (max-width: 480px) {
-  .stat-row--4 { grid-template-columns: 1fr; }
+  .stat-row--4,
+  .stat-row--5 { grid-template-columns: 1fr; }
 }
 
 .stat__label {
@@ -1296,6 +1303,9 @@ select {
     display: flex;
     width: 100%;
   }
+  /* 4+ options (onboarding pay cycle) fall into a 2×2 grid instead of squeezing one row */
+  .segment--wrap { flex-wrap: wrap; }
+  .segment--wrap .segment__btn { flex: 1 1 45%; }
   .segment__btn {
     flex: 1 1 0;
     min-width: 0;

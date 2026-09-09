@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { defaultBudget, loadBudget, newId, saveBudget, type BudgetCategory, type BudgetState, type Goal, type PayCycle, type RecurringExpense } from "../lib/budgetStorage";
 import { useHydrated } from "../lib/useHydrated";
 import { useIsMobile } from "../lib/useIsMobile";
-import { todayISO } from "../lib/month";
+import { paychecksPerYear, todayISO } from "../lib/month";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { BottomSheet } from "../components/BottomSheet";
 import { AddBillForm, billDraftErrors, emptyBillDraft, type BillFormDraft } from "../components/AddBillForm";
@@ -193,7 +193,7 @@ export default function OnboardingPage() {
         goals: goals.filter((g) => g.name.trim()).map((g) => ({ id: g.id, name: g.name.trim(), type: g.type, targetAmount: g.targetAmount, linkedBudgetCategoryIds: [], linkedExpenseIds: [], manualAdjustments: [], appliedPeriods: [] }) as Goal),
         payCycle: income.payCycle,
         paycheckAmount: income.amount,
-        incomeMonthly: income.payCycle === "weekly" ? (income.amount * 52) / 12 : income.payCycle === "biweekly" ? (income.amount * 26) / 12 : (income.amount * 24) / 12,
+        incomeMonthly: (income.amount * paychecksPerYear(income.payCycle)) / 12,
         lastPaycheckDate: income.payCycle !== "semimonthly" ? income.lastPaycheckDate : "",
       }),
     );
@@ -265,8 +265,8 @@ export default function OnboardingPage() {
               </div>
               <div className="field">
                 <label className="field__label">Pay cycle</label>
-                <div className="segment" role="radiogroup">
-                  {([["weekly", "Weekly"], ["biweekly", "Bi-weekly"], ["semimonthly", "Semi-monthly"]] as const).map(([val, lbl]) => (
+                <div className="segment segment--wrap" role="radiogroup">
+                  {([["weekly", "Weekly"], ["biweekly", "Bi-weekly"], ["semimonthly", "Semi-monthly"], ["monthly", "Monthly"]] as const).map(([val, lbl]) => (
                     <button
                       key={val}
                       type="button"
@@ -294,6 +294,10 @@ export default function OnboardingPage() {
                       <dt>Semi-monthly</dt>
                       <dd>24 paychecks/year, always on the 1st and 15th. No anchor needed.</dd>
                     </div>
+                    <div>
+                      <dt>Monthly</dt>
+                      <dd>12 paychecks/year, on the same day of the month as your most recent paycheck.</dd>
+                    </div>
                   </dl>
                 </details>
               </div>
@@ -306,7 +310,11 @@ export default function OnboardingPage() {
                     value={income.lastPaycheckDate}
                     onChange={(e) => setIncome((d) => ({ ...d, lastPaycheckDate: e.target.value }))}
                   />
-                  <p className="field__hint">Used to forecast your {income.payCycle === "weekly" ? "weekly" : "bi-weekly"} paycheck dates.</p>
+                  <p className="field__hint">
+                    {income.payCycle === "monthly"
+                      ? "You'll be paid on this day of the month going forward."
+                      : `Used to forecast your ${income.payCycle === "weekly" ? "weekly" : "bi-weekly"} paycheck dates.`}
+                  </p>
                 </div>
               )}
             </div>

@@ -32,6 +32,10 @@ export function weeklyIncome(id: string, name: string, amount: number, anchor: s
   return { id, name, amount, cadence: "monthly", payCycle: "weekly", lastPaycheckDate: anchor };
 }
 
+export function monthlyIncome(id: string, name: string, amount: number, anchor: string): Income {
+  return { id, name, amount, cadence: "monthly", payCycle: "monthly", lastPaycheckDate: anchor };
+}
+
 export function monthlyExpense(id: string, name: string, amount: number, dueDay: number): RecurringExpense {
   return { id, name, amount, cadence: "monthly", dueDay, paidPeriods: [] };
 }

@@ -12,12 +12,14 @@ import { BottomSheet } from "../components/BottomSheet";
 import { moneyFmt } from "../lib/currency";
 import { jumpToAddForm } from "../lib/jumpToAddForm";
 
-const needsAnchor = (cycle: PayCycle) => cycle === "biweekly" || cycle === "weekly";
+// Semi-monthly is fixed to the 1st & 15th; every other cycle is anchored to a real paycheck date.
+const needsAnchor = (cycle: PayCycle) => cycle !== "semimonthly";
 
 const CYCLE_OPTIONS: { value: PayCycle; label: string }[] = [
   { value: "weekly", label: "Weekly" },
   { value: "biweekly", label: "Bi-weekly" },
   { value: "semimonthly", label: "Semi-monthly" },
+  { value: "monthly", label: "Monthly" },
 ];
 
 type SourceDraft = {
@@ -238,6 +240,7 @@ export default function IncomePage() {
   const weeklyCount = state.incomes.filter((i) => i.payCycle === "weekly").length;
   const biweeklyCount = state.incomes.filter((i) => i.payCycle === "biweekly").length;
   const semiCount = state.incomes.filter((i) => i.payCycle === "semimonthly").length;
+  const monthlyCount = state.incomes.filter((i) => i.payCycle === "monthly").length;
 
   return (
     <section className="container">
@@ -261,12 +264,16 @@ export default function IncomePage() {
               <dt>Semi-monthly</dt>
               <dd>24 paychecks/year, always on the 1st and 15th. No anchor needed.</dd>
             </div>
+            <div>
+              <dt>Monthly</dt>
+              <dd>12 paychecks/year, on the same day of the month as your most recent paycheck.</dd>
+            </div>
           </dl>
         </details>
       </header>
 
       {/* Stats row */}
-      <div className="stat-row stat-row--4">
+      <div className="stat-row stat-row--5">
         <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
           <div className="stat__label">Monthly income</div>
           <div className="stat__value">{moneyFmt(monthly)}</div>
@@ -282,6 +289,10 @@ export default function IncomePage() {
         <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
           <div className="stat__label">Semi-monthly sources</div>
           <div className="stat__value">{semiCount}</div>
+        </article>
+        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+          <div className="stat__label">Monthly sources</div>
+          <div className="stat__value">{monthlyCount}</div>
         </article>
       </div>
 

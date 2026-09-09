@@ -1,8 +1,8 @@
 export const BUDGET_KEY = "budgetApp:v1";
 
-export type PayCycle = "biweekly" | "semimonthly" | "weekly";
+export type PayCycle = "biweekly" | "semimonthly" | "weekly" | "monthly";
 
-const PAY_CYCLES: readonly PayCycle[] = ["biweekly", "semimonthly", "weekly"];
+const PAY_CYCLES: readonly PayCycle[] = ["biweekly", "semimonthly", "weekly", "monthly"];
 
 function coercePayCycle(value: unknown, fallback: PayCycle = "biweekly"): PayCycle {
   return PAY_CYCLES.includes(value as PayCycle) ? (value as PayCycle) : fallback;

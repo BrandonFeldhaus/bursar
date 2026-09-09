@@ -1,4 +1,4 @@
-import type { BudgetState, Income, RecurringExpense } from "./budgetStorage";
+import type { BudgetState, Income, PayCycle, RecurringExpense } from "./budgetStorage";
 
 export function todayISO(): string {
   const d = new Date();
@@ -64,7 +64,7 @@ export function annualSetAside(amount: number): number {
 }
 
 export function incomeDatesForMonth(income: Income, monthKey: string): Date[] {
-  const { year, monthIndex } = monthBounds(monthKey);
+  const { year, monthIndex, lastDay } = monthBounds(monthKey);
 
   if (income.payCycle === "semimonthly") {
     return [new Date(year, monthIndex, 1), new Date(year, monthIndex, 15)];
@@ -72,6 +72,11 @@ export function incomeDatesForMonth(income: Income, monthKey: string): Date[] {
 
   const last = parseISODate(income.lastPaycheckDate);
   if (!last) return [];
+
+  if (income.payCycle === "monthly") {
+    // Paid once a month on the anchor's day-of-month, clamped to shorter months (Jan 31 → Feb 28).
+    return [new Date(year, monthIndex, Math.min(last.getDate(), lastDay))];
+  }
 
   const intervalDays = income.payCycle === "weekly" ? 7 : 14;
   const monthStart = new Date(year, monthIndex, 1);
@@ -95,14 +100,19 @@ export function recurringDueDate(expense: RecurringExpense, monthKey: string): D
   return new Date(year, monthIndex, dd);
 }
 
+const PAYCHECKS_PER_YEAR: Record<PayCycle, number> = {
+  weekly: 52,
+  biweekly: 26,
+  semimonthly: 24,
+  monthly: 12,
+};
+
+export function paychecksPerYear(cycle: PayCycle): number {
+  return PAYCHECKS_PER_YEAR[cycle] ?? 24;
+}
+
 export function monthlyIncomeOf(state: BudgetState): number {
-  return state.incomes.reduce((sum, inc) => {
-    const factor =
-      inc.payCycle === "weekly" ? 52 / 12 :
-      inc.payCycle === "biweekly" ? 26 / 12 :
-      24 / 12;
-    return sum + inc.amount * factor;
-  }, 0);
+  return state.incomes.reduce((sum, inc) => sum + inc.amount * (paychecksPerYear(inc.payCycle) / 12), 0);
 }
 
 // ─── Paycheck-based periods ──────────────────────────────────────────────────
