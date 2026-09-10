@@ -45,37 +45,31 @@ export function incomeFromDraft(draft: SourceDraft, errs: ReturnType<typeof sour
   };
 }
 
-/** Add-an-income-source form: inline below the Income table, in the Overview's empty state, and inside the mobile BottomSheet. */
+/** Add-an-income-source form: inside FormDialog on the Income page and the Overview. */
 export function AddSourceForm({
   draft,
   setDraft,
   onAdd,
   attempted,
-  formId,
   inSheet,
-  narrow,
 }: {
   draft: SourceDraft;
   setDraft: Dispatch<SetStateAction<SourceDraft>>;
   onAdd: () => void;
   attempted?: boolean;
-  formId?: string;
-  /** Renders inside the mobile BottomSheet — drops the sunk background/padding. */
+  /** Renders inside FormDialog / BottomSheet — drops the sunk background/padding. */
   inSheet?: boolean;
-  /** Two columns at every width (inside a period card). */
-  narrow?: boolean;
 }) {
   const errs = sourceDraftErrors(draft);
   const cls = [
     "inline-form",
     needsAnchor(draft.payCycle) ? "inline-form--4col" : "",
     inSheet ? "inline-form--sheet" : "",
-    narrow ? "inline-form--narrow" : "",
   ].filter(Boolean).join(" ");
   return (
-    <div id={formId} className={cls}>
+    <div className={cls}>
       <div className={`field${attempted && errs.name ? " field--has-error" : ""}`}>
-        <label className="field__label" htmlFor="inc-draft-name">New source</label>
+        <label className="field__label" htmlFor="inc-draft-name">Name</label>
         <input
           id="inc-draft-name"
           className="input"
@@ -110,7 +104,7 @@ export function AddSourceForm({
         )}
       </div>
       <div className="field">
-        <label className="field__label" htmlFor="inc-draft-cycle">Cycle</label>
+        <label className="field__label" htmlFor="inc-draft-cycle">Pay cycle</label>
         <select
           id="inc-draft-cycle"
           className="select"
@@ -147,7 +141,7 @@ export function AddSourceForm({
         </div>
       )}
       <button className="btn" type="button" onClick={onAdd}>
-        Add source
+        Add income
       </button>
     </div>
   );

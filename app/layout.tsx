@@ -6,7 +6,7 @@ import { BottomNav } from "./components/BottomNav";
 
 export const metadata: Metadata = {
   title: "Bursar",
-  description: "A ledger-style paycheck budgeting workspace for income, expenses, and budget planning.",
+  description: "A paycheck-period budgeting app for income, bills, budget, and goals. Data stays in your browser.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

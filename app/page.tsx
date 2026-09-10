@@ -29,9 +29,9 @@ import { useHydrated } from "./lib/useHydrated";
 import { useIsMobile } from "./lib/useIsMobile";
 import { moneyFmt } from "./lib/currency";
 import { computeAllocations } from "./lib/allocations";
-import { jumpToAddForm } from "./lib/jumpToAddForm";
+import { goalFundingTotal } from "./lib/goalFunding";
 import { ConfirmDialog } from "./components/ConfirmDialog";
-import { BottomSheet } from "./components/BottomSheet";
+import { FormDialog } from "./components/FormDialog";
 import { OverflowMenu } from "./components/OverflowMenu";
 import { ImportLedgerButton } from "./components/ImportLedgerButton";
 import { Hint, dismissHint, type HintId } from "./components/Hint";
@@ -135,20 +135,20 @@ function PeriodCard({
   period: PaycheckPeriod;
   budgetCategories: BudgetCategory[];
   goals: Goal[];
-  /** The ledger has at least one income source (else the fallback halves are shown). */
+  /** The store has at least one income source (else the fallback halves are shown). */
   hasIncome: boolean;
-  /** The ledger has at least one bill (else the Bills tab shows its empty state). */
+  /** The store has at least one bill (else the Bills tab shows its empty state). */
   hasBills: boolean;
   isCurrent: boolean;
   onTogglePaid: (expenseId: string, periodId: string) => void;
   onToggleGoalPeriod: (goalId: string, periodId: string, amount: number) => void;
   /** Replaces the whole card body (first-run empty state). */
   body?: ReactNode;
-  /** Rendered in the Bills tab when the ledger has no bills at all. */
+  /** Rendered in the Bills tab when the store has no bills at all. */
   billsEmptyState?: ReactNode;
   /** Quick-add row at the bottom of the Income tab. */
   incomeAddon?: ReactNode;
-  /** Quick-add row at the bottom of the Bills tab (when the ledger has bills). */
+  /** Quick-add row at the bottom of the Bills tab (when the store has bills). */
   billsAddon?: ReactNode;
   /** One-line hint rendered under the tab row. */
   hint?: ReactNode;
@@ -176,17 +176,10 @@ function PeriodCard({
 
   const periodId = `${period.monthKey}-${period.key}`;
 
+  // What each goal's funding sources come to in this period — shared with the goal editor via lib/goalFunding.ts.
   const goalItems = useMemo(() => {
     return goals.map((g) => {
-      const catAmount = g.linkedBudgetCategoryIds.reduce((s, catId) => {
-        const alloc = allocations.find((a) => a.id === catId);
-        return s + (alloc?.amount ?? 0);
-      }, 0);
-      const expAmount = g.linkedExpenseIds.reduce((s, expId) => {
-        const bill = period.bills.find((b) => b.expenseId === expId);
-        return s + (bill?.amount ?? 0);
-      }, 0);
-      const linkedAmount = catAmount + expAmount;
+      const linkedAmount = goalFundingTotal(g, allocations, period.bills);
       const applied = g.appliedPeriods.find((p) => p.periodId === periodId);
       const totalApplied =
         g.appliedPeriods.reduce((s, p) => s + p.amount, 0) +
@@ -333,7 +326,7 @@ function PeriodCard({
                 ) : (
                 period.bills.map((b) => (
                   <div key={b.id} className={`recent-item${b.paid ? " recent-item--paid" : ""}`}>
-                    <span className="recent-item__group">
+                    <label className="recent-item__group recent-item__toggle">
                       <input
                         type="checkbox"
                         checked={b.paid}
@@ -346,7 +339,7 @@ function PeriodCard({
                       {b.cadence === "annual" && (
                         <span className="badge badge--xs">annual</span>
                       )}
-                    </span>
+                    </label>
                     <span className="recent-item__group recent-item__group--wide">
                       <span className="recent-item__date">{formatShortDate(b.date)}</span>
                       <Money value={b.amount} struck={b.paid} />
@@ -392,7 +385,7 @@ function PeriodCard({
                 {goalItems.map(({ goal, linkedAmount, isApplied, totalApplied, pct }) => (
                   <div key={goal.id} className="goal-period-item">
                     <div className="recent-item">
-                      <span className="recent-item__group">
+                      <label className="recent-item__group recent-item__toggle">
                         <input
                           type="checkbox"
                           checked={isApplied}
@@ -401,7 +394,7 @@ function PeriodCard({
                           disabled={linkedAmount <= 0}
                           title={linkedAmount > 0
                             ? (isApplied ? "Remove contribution" : "Apply contribution")
-                            : "No linked amount — set a link in Goals"
+                            : "Not funded yet — add funding sources on the Goals page"
                           }
                           aria-label={`${goal.name} contribution applied`}
                         />
@@ -409,12 +402,12 @@ function PeriodCard({
                         <span className="badge badge--xs">
                           {goal.type === "savings" ? "savings" : "debt"}
                         </span>
-                      </span>
+                      </label>
                       <span className="recent-item__group">
                         {linkedAmount > 0 ? (
                           <Money value={linkedAmount} />
                         ) : (
-                          <span className="goal-period-item__nolink">no link</span>
+                          <span className="goal-period-item__nolink">not funded</span>
                         )}
                       </span>
                     </div>
@@ -432,7 +425,7 @@ function PeriodCard({
                 ))}
                 {totalGoalAmount > 0 && (
                   <div className="recent-item recent-item--total">
-                    <span className="recent-item__name recent-item__name--italic">Total linked</span>
+                    <span className="recent-item__name recent-item__name--italic">Total to goals</span>
                     <Money value={totalGoalAmount} />
                   </div>
                 )}
@@ -445,7 +438,7 @@ function PeriodCard({
   );
 }
 
-type SheetKind = null | "source" | "bill";
+type DialogKind = null | "source" | "bill";
 
 export default function Home() {
   const hydrated = useHydrated();
@@ -454,12 +447,10 @@ export default function Home() {
   const [month, setMonth] = useState(currentMonthKey());
   const [refreshOpen, setRefreshOpen] = useState(false);
 
-  // First-run forms (income in the first card, bills in any card)
-  const [sheet, setSheet] = useState<SheetKind>(null);
-  const [sourceFormAt, setSourceFormAt] = useState<string | null>(null);
+  // Add income / add bill: one FormDialog (centered on desktop, bottom sheet on mobile)
+  const [dialog, setDialog] = useState<DialogKind>(null);
   const [sourceDraft, setSourceDraft] = useState<SourceDraft>(emptySourceDraft);
   const [sourceAttempted, setSourceAttempted] = useState(false);
-  const [billFormAt, setBillFormAt] = useState<string | null>(null);
   const [billDraft, setBillDraft] = useState<BillFormDraft>(emptyBillDraft);
   const [billAttempted, setBillAttempted] = useState(false);
   const [importStatus, setImportStatus] = useState("");
@@ -604,14 +595,10 @@ export default function Home() {
       setSourceAttempted(true);
       return false;
     }
-    const wasFirstRun = (state?.incomes.length ?? 0) === 0;
     const income = incomeFromDraft(sourceDraft, errs);
     setState((s) => (s ? { ...s, incomes: [...s.incomes, income] } : s));
     setSourceDraft(emptySourceDraft());
     setSourceAttempted(false);
-    // The first-run card turns into a normal card, so its form closes; a quick-add form stays open for the next one.
-    if (wasFirstRun || isMobile) setSourceFormAt(null);
-    else focusForm();
     return true;
   }
 
@@ -625,37 +612,7 @@ export default function Home() {
     setState((s) => (s ? { ...s, recurringExpenses: [...s.recurringExpenses, expense] } : s));
     setBillDraft(emptyBillDraft);
     setBillAttempted(false);
-    if (isMobile) setBillFormAt(null);
-    else focusForm();
     return true;
-  }
-
-  /** Put the cursor back in the open inline form's first field so the next add is one keystroke away. */
-  function focusForm() {
-    window.setTimeout(() => {
-      document.querySelector<HTMLElement>("#add-form input")?.focus({ preventScroll: true });
-    }, 0);
-  }
-
-  // Only one inline form is open at a time (they share the add-form id).
-  function openSourceForm(periodKey: string) {
-    if (isMobile) {
-      setSheet("source");
-      return;
-    }
-    setBillFormAt(null);
-    setSourceFormAt(periodKey);
-    window.setTimeout(() => jumpToAddForm("add-form"), 0);
-  }
-
-  function openBillForm(periodKey: string) {
-    if (isMobile) {
-      setSheet("bill");
-      return;
-    }
-    setSourceFormAt(null);
-    setBillFormAt(periodKey);
-    window.setTimeout(() => jumpToAddForm("add-form"), 0);
   }
 
   function loadSample() {
@@ -670,7 +627,7 @@ export default function Home() {
           <div className="month-head__title">
             <h1 className="month-head__label">Paycheck periods</h1>
           </div>
-          <p className="muted month-head__loading">Loading the current ledger…</p>
+          <p className="muted month-head__loading">Loading…</p>
         </div>
         <div className="sheet month-summary" aria-hidden="true">
           <span className="skeleton skeleton--line" />
@@ -696,86 +653,44 @@ export default function Home() {
   const showGoalsHint = hasBills && state.goals.length === 0;
   const monthLabel = formatMonthLabel(month);
 
-  const sourceForm = (
-    <AddSourceForm
-      formId="add-form"
-      narrow
-      draft={sourceDraft}
-      setDraft={setSourceDraft}
-      onAdd={addIncome}
-      attempted={sourceAttempted}
-    />
-  );
-
-  const billForm = (
-    <AddBillForm
-      formId="add-form"
-      narrow
-      combinedDue
-      draft={billDraft}
-      setDraft={setBillDraft}
-      onAdd={addBill}
-      attempted={billAttempted}
-    />
-  );
-
-  const firstRunBody = (periodKey: string) => (
+  const firstRunBody = (
     <div className="period-empty">
       <p className="period-empty__text">
-        Bursar splits each month by your paydays. Add your first paycheck to see your periods.
+        Bursar splits each month by your paydays. Add your first income to see your periods.
       </p>
-      {!isMobile && sourceFormAt === periodKey ? (
-        sourceForm
-      ) : (
-        <div>
-          <button type="button" className="btn btn--lg" onClick={() => openSourceForm(periodKey)}>
-            Add paycheck
-          </button>
-        </div>
-      )}
+      <div>
+        <button type="button" className="btn btn--lg" onClick={() => setDialog("source")}>
+          Add income
+        </button>
+      </div>
       <div className="period-empty__links">
-        <ImportLedgerButton className="text-link-btn" onStatus={setImportStatus}>Import a saved ledger</ImportLedgerButton>
+        <ImportLedgerButton className="text-link-btn" onStatus={setImportStatus}>Import a backup file</ImportLedgerButton>
         <button type="button" className="text-link-btn" onClick={loadSample}>Try it with sample data</button>
       </div>
       {importStatus && <p className="muted" role="status">{importStatus}</p>}
     </div>
   );
 
-  const billsEmptyBody = (periodKey: string) => (
+  const billsEmptyBody = (
     <div className="period-empty">
       <p className="period-empty__text">No bills yet. Add the bills this paycheck needs to cover.</p>
-      {!isMobile && billFormAt === periodKey ? (
-        billForm
-      ) : (
-        <div>
-          <button type="button" className="btn" onClick={() => openBillForm(periodKey)}>
-            Add bill
-          </button>
-        </div>
-      )}
+      <div>
+        <button type="button" className="btn" onClick={() => setDialog("bill")}>
+          Add bill
+        </button>
+      </div>
     </div>
   );
 
-  // Quick-add rows at the bottom of the Income / Bills tabs: the shared form opens inline
-  // (desktop) or in the bottom sheet (mobile); "Done" closes the inline form.
-  const quickAdd = (kind: "source" | "bill", periodKey: string) => {
-    const open = !isMobile && (kind === "source" ? sourceFormAt : billFormAt) === periodKey;
-    const close = kind === "source" ? () => setSourceFormAt(null) : () => setBillFormAt(null);
-    const openForm = kind === "source" ? openSourceForm : openBillForm;
-    return (
-      <div className="period-card__quick-add">
-        {open && (kind === "source" ? sourceForm : billForm)}
-        <button type="button" className="text-link-btn" onClick={() => (open ? close() : openForm(periodKey))}>
-          {open ? "Done" : (
-            <>
-              <IconPlus size={12} aria-hidden="true" />
-              {kind === "source" ? "Add paycheck" : "Add bill"}
-            </>
-          )}
-        </button>
-      </div>
-    );
-  };
+  // Quick-add row at the bottom of the Income / Bills tabs — opens the same dialog / sheet.
+  const quickAdd = (kind: "source" | "bill") => (
+    <div className="period-card__quick-add">
+      <button type="button" className="text-link-btn" onClick={() => setDialog(kind)}>
+        <IconPlus size={14} aria-hidden="true" />
+        {kind === "source" ? "Add income" : "Add bill"}
+      </button>
+    </div>
+  );
 
   return (
     <section className="container">
@@ -838,10 +753,10 @@ export default function Home() {
             isCurrent={isCurrent}
             onTogglePaid={togglePaid}
             onToggleGoalPeriod={toggleGoalPeriod}
-            body={!hasIncome && i === 0 ? firstRunBody(period.key) : undefined}
-            billsEmptyState={hasIncome && !hasBills ? billsEmptyBody(period.key) : undefined}
-            incomeAddon={hasIncome ? quickAdd("source", period.key) : undefined}
-            billsAddon={hasBills ? quickAdd("bill", period.key) : undefined}
+            body={!hasIncome && i === 0 ? firstRunBody : undefined}
+            billsEmptyState={hasIncome && !hasBills ? billsEmptyBody : undefined}
+            incomeAddon={hasIncome ? quickAdd("source") : undefined}
+            billsAddon={hasBills ? quickAdd("bill") : undefined}
             hint={i === 0 && showGoalsHint ? <Hint id="overview-goals" hints={state.meta.hints} onDismiss={dismiss} /> : undefined}
           />
         ))}
@@ -886,30 +801,26 @@ export default function Home() {
         onCancel={() => setRefreshOpen(false)}
       />
 
-      {/* Mobile add sheets — same shared forms the desktop inline blocks use */}
-      {isMobile && sheet === "source" && (
-        <BottomSheet open title="Add paycheck" onClose={() => setSheet(null)}>
-          <AddSourceForm
-            inSheet
-            draft={sourceDraft}
-            setDraft={setSourceDraft}
-            onAdd={() => { if (addIncome()) setSheet(null); }}
-            attempted={sourceAttempted}
-          />
-        </BottomSheet>
-      )}
-      {isMobile && sheet === "bill" && (
-        <BottomSheet open title="Add bill" onClose={() => setSheet(null)}>
-          <AddBillForm
-            inSheet
-            combinedDue
-            draft={billDraft}
-            setDraft={setBillDraft}
-            onAdd={() => { if (addBill()) setSheet(null); }}
-            attempted={billAttempted}
-          />
-        </BottomSheet>
-      )}
+      {/* Add income / add bill — centered dialog on desktop, bottom sheet on mobile; closes only on a successful add */}
+      <FormDialog open={dialog === "source"} title="Add income" onClose={() => setDialog(null)}>
+        <AddSourceForm
+          inSheet
+          draft={sourceDraft}
+          setDraft={setSourceDraft}
+          onAdd={() => { if (addIncome()) setDialog(null); }}
+          attempted={sourceAttempted}
+        />
+      </FormDialog>
+      <FormDialog open={dialog === "bill"} title="Add bill" onClose={() => setDialog(null)}>
+        <AddBillForm
+          inSheet
+          combinedDue
+          draft={billDraft}
+          setDraft={setBillDraft}
+          onAdd={() => { if (addBill()) setDialog(null); }}
+          attempted={billAttempted}
+        />
+      </FormDialog>
     </section>
   );
 }

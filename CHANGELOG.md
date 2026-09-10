@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Goals: creating a goal is three fields (name, type, target); funding is set afterwards in the editor's "Funded by" section from a grouped picker of budget categories and bills that shows each source's per-paycheck amount and a total with a paychecks-to-go estimate. Adjustments sit in their own section
+- Every "+ Add" button opens the form in a centered dialog on desktop and the bottom sheet on mobile; the inline forms under tables and the jump-to-form scrolling are gone (empty tables keep an inline "Add your first…" action)
+- Typography: three roles — Caveat for titles, Source Sans 3 for everything else, JetBrains Mono for numbers — on a 13 / 15 / 17 / 20 / 24 / 30 scale with nothing below 13px; Kalam dropped, Special Elite kept for stamps only; muted text darkened to pass 4.5:1
+- Plain copy: "Bills", "Name", "Repeats", "Budget", "Income", "Funded by", "Add income"; decorative kickers removed
+- Mobile bottom nav is five items — Overview, Expenses, Budget, Goals, More (Income and Settings in a sheet); 44px touch targets on mobile
 - Overview order: month header, one-line month summary, period cards (current first), collapsible cash-flow timeline
 - Period card tabs now have a visible active state and proper tab semantics
 - Paid marks and goal contributions are always editable in every month; snapshots store definitions only

@@ -18,10 +18,8 @@ import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
 import { AddBillForm, billDraftErrors, emptyBillDraft, expenseFromDraft, type BillFormDraft } from "../components/AddBillForm";
 import { Hint, dismissHint, type HintId } from "../components/Hint";
-import { BottomSheet } from "../components/BottomSheet";
+import { FormDialog } from "../components/FormDialog";
 import { moneyFmt, moneyShort } from "../lib/currency";
-import { jumpToAddForm } from "../lib/jumpToAddForm";
-import { useIsMobile } from "../lib/useIsMobile";
 
 function BillsCalendar({ state, month }: { state: BudgetState; month: string }) {
   const { year, monthIndex, lastDay } = monthBounds(month);
@@ -159,7 +157,6 @@ function BillsAgenda({ state, month }: { state: BudgetState; month: string }) {
 
 export default function ExpensesPage() {
   const hydrated = useHydrated();
-  const isMobile = useIsMobile();
   const [state, setState] = useState<BudgetState | null>(null);
   const [month, setMonth] = useState(currentMonthKey());
   const [view, setView] = useState<"calendar" | "list">("calendar");
@@ -242,9 +239,8 @@ export default function ExpensesPage() {
     return (
       <section className="container" aria-busy="true">
         <header className="sheet page-head">
-          <p className="kicker">Expenses</p>
-          <h1 className="page-head__title">Bill notations</h1>
-          <p className="page-head__lead">Loading your bill register…</p>
+          <h1 className="page-head__title">Bills</h1>
+          <p className="page-head__lead">Loading bills…</p>
         </header>
         <div className="sheet skeleton-card" aria-hidden="true">
           {[0, 1, 2].map((i) => (
@@ -261,9 +257,8 @@ export default function ExpensesPage() {
     <section className="container">
       {/* Page head */}
       <header className="sheet page-head">
-        <p className="kicker">Expenses</p>
-        <h1 className="page-head__title">Bill notations</h1>
-        <p className="page-head__lead">Log your recurring bills here. Annual expenses are divided across 12 months so every period shares the cost evenly.</p>
+        <h1 className="page-head__title">Bills</h1>
+        <p className="page-head__lead">Log your recurring bills here. Annual bills are divided across 12 months so every period shares the cost evenly.</p>
       </header>
 
       <Hint id="expenses" hints={state.meta.hints} onDismiss={dismiss} />
@@ -271,7 +266,7 @@ export default function ExpensesPage() {
       {/* Stats row */}
       <div className="stat-row">
         <article className="sheet stat stat--accent sheet--stat">
-          <div className="stat__label">Monthly obligations</div>
+          <div className="stat__label">Monthly bills</div>
           <div className="stat__value">{moneyFmt(totals.totalMonthly)}</div>
         </article>
         <article className="sheet stat sheet--stat">
@@ -279,12 +274,12 @@ export default function ExpensesPage() {
           <div className="stat__value">{moneyFmt(totals.monthlyIncome)}</div>
         </article>
         <article className="sheet stat sheet--stat">
-          <div className="stat__label">{balanced ? "Cushion" : "Shortfall"}</div>
+          <div className="stat__label">{balanced ? "Leftover" : "Shortfall"}</div>
           <div className={`stat__value${!balanced ? " stat__value--neg" : ""}`}>
             {moneyFmt(Math.abs(totals.monthlyIncome - totals.totalMonthly))}
           </div>
           <div className="stat__sub">
-            {balanced ? "Income covers obligations." : "Income does not cover obligations."}
+            {balanced ? "Income covers your bills." : "Income does not cover your bills."}
           </div>
         </article>
       </div>
@@ -323,7 +318,7 @@ export default function ExpensesPage() {
       {view === "calendar" && (
         <div className="sheet calendar-card">
           <p className="kicker">{formatMonthLabel(month)}</p>
-          <h2 className="section-title mb-3">Bills due calendar</h2>
+          <h2 className="section-title mb-3">Calendar</h2>
           <div className="calendar-desktop">
             <BillsCalendar state={state} month={month} />
           </div>
@@ -333,35 +328,34 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* Bill register table */}
+      {/* Bills table */}
       <div className="sheet table-card">
         <div className="table-card__head row-between mb-3">
           <div className="table-card__title">
-            <div>
-              <p className="kicker">Recurring entries</p>
-              <h2 className="section-title">Bill register</h2>
-            </div>
+            <h2 className="section-title">All bills</h2>
             <SavedIndicator visible={saved.visible} />
           </div>
           <div className="table-card__actions">
-            <button
-              type="button"
-              className="btn mobile-only-inline btn--jump"
-              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
-            >
-              <IconPlus size={12} aria-hidden="true" />Add bill
+            <button type="button" className="btn btn--add" onClick={() => setAddOpen(true)}>
+              <IconPlus size={14} aria-hidden="true" />Add bill
             </button>
-            {balanced && <span className="stamp stamp--audited mobile-hidden">Balanced</span>}
+            {balanced && state.recurringExpenses.length > 0 && <span className="stamp mobile-hidden">Balanced</span>}
           </div>
         </div>
 
+        {state.recurringExpenses.length === 0 ? (
+          <div className="table-empty">
+            <p className="table-empty__text">No bills yet.</p>
+            <button type="button" className="btn" onClick={() => setAddOpen(true)}>Add your first bill</button>
+          </div>
+        ) : (
         <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
           <table className="ledger-table ledger-table--responsive ledger-table--bills">
             <thead>
               <tr>
-                <th>Notation</th>
+                <th>Name</th>
                 <th className="text-right">Amount</th>
-                <th>Cadence</th>
+                <th>Repeats</th>
                 <th>Due day</th>
                 <th>Annual month</th>
                 <th className="text-tight" />
@@ -370,7 +364,7 @@ export default function ExpensesPage() {
             <tbody>
               {state.recurringExpenses.map((exp) => (
                 <tr key={exp.id}>
-                  <td data-label="Notation">
+                  <td data-label="Name">
                     <input className="input" value={exp.name} onChange={(e) => update(exp.id, { name: e.target.value })} aria-label="Bill name" />
                   </td>
                   <td className="text-right mono" data-label="Amount">
@@ -386,11 +380,11 @@ export default function ExpensesPage() {
                       }
                     />
                   </td>
-                  <td data-label="Cadence">
+                  <td data-label="Repeats">
                     <select
                       className="select"
                       value={exp.cadence}
-                      aria-label="Cadence"
+                      aria-label="Repeats"
                       onChange={(e) => update(exp.id, { cadence: e.target.value as "monthly" | "annual" })}
                     >
                       <option value="monthly">Monthly</option>
@@ -442,25 +436,19 @@ export default function ExpensesPage() {
             </tbody>
           </table>
         </div>
-
-        {/* Inline add form (desktop) */}
-        {!isMobile && (
-          <AddBillForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={add} attempted={attempted} />
         )}
       </div>
 
-      {/* Mobile add sheet */}
-      {isMobile && addOpen && (
-        <BottomSheet open title="Add bill" onClose={() => setAddOpen(false)}>
-          <AddBillForm
-            inSheet
-            draft={draft}
-            setDraft={setDraft}
-            onAdd={() => { if (add()) setAddOpen(false); }}
-            attempted={attempted}
-          />
-        </BottomSheet>
-      )}
+      {/* "+ Add bill": dialog on desktop, bottom sheet on mobile */}
+      <FormDialog open={addOpen} title="Add bill" onClose={() => setAddOpen(false)}>
+        <AddBillForm
+          inSheet
+          draft={draft}
+          setDraft={setDraft}
+          onAdd={() => { if (add()) setAddOpen(false); }}
+          attempted={attempted}
+        />
+      </FormDialog>
       <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </section>
   );

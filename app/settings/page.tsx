@@ -58,9 +58,8 @@ export default function SettingsPage() {
     <section className="container">
       {/* Page head */}
       <header className="sheet page-head">
-        <p className="kicker">Settings</p>
-        <h1 className="page-head__title">Data &amp; backup</h1>
-        <p className="page-head__lead">Back up your ledger, restore it from a saved file, or erase everything and start fresh.</p>
+        <h1 className="page-head__title">Settings</h1>
+        <p className="page-head__lead">Back up your data, restore it from a saved file, or erase everything and start fresh.</p>
       </header>
 
       {hints && <Hint id="settings" hints={hints} onDismiss={dismiss} />}
@@ -69,13 +68,10 @@ export default function SettingsPage() {
       <div className="settings-grid">
         <div className="sheet settings-card">
           <div className="row-between mb-3">
-            <div>
-              <p className="kicker">Backup</p>
-              <h2 className="section-title">Backup &amp; restore</h2>
-            </div>
+            <h2 className="section-title">Backup &amp; restore</h2>
             <span className="badge">v1</span>
           </div>
-          <p className="muted">Save your full ledger to a JSON file, or load it back from a previously exported file.</p>
+          <p className="muted">Save everything to a JSON file, or load it back from a previously exported file.</p>
           <div className="settings-actions">
             <button className="btn" type="button" onClick={exportData}>
               Export JSON
@@ -86,10 +82,7 @@ export default function SettingsPage() {
 
         <div className="sheet settings-card">
           <div className="row-between mb-3">
-            <div>
-              <p className="kicker">Reset</p>
-              <h2 className="section-title">Start over</h2>
-            </div>
+            <h2 className="section-title">Start over</h2>
           </div>
           <p className="muted">Erases everything Bursar has stored in this browser and returns to an empty Overview. Export a backup first if you want to keep it. You can also bring back the one-line hints on each page.</p>
           <div className="settings-actions">

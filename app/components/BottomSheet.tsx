@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useRef } from "react";
 import { IconX } from "@tabler/icons-react";
+import { useModal } from "../lib/useModal";
 
+/** Mobile slide-up drawer. Escape and the overlay close it; focus goes to the first field and back to the opener on close. */
 export function BottomSheet({
   open,
   title,
@@ -14,18 +16,8 @@ export function BottomSheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [open, onClose]);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useModal(open, onClose, panelRef);
 
   if (!open) return null;
 
@@ -39,7 +31,7 @@ export function BottomSheet({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bottom-sheet">
+      <div className="bottom-sheet" ref={panelRef}>
         <div className="bottom-sheet__head">
           <h3 className="bottom-sheet__title">{title}</h3>
           <button

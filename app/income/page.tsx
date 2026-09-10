@@ -4,19 +4,16 @@ import { useEffect, useState } from "react";
 import { IconInfoCircle, IconPlus, IconX } from "@tabler/icons-react";
 import { loadState, saveState, type BudgetState, type Income, type PayCycle } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
-import { useIsMobile } from "../lib/useIsMobile";
 import { todayISO, monthlyIncomeOf } from "../lib/month";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
-import { BottomSheet } from "../components/BottomSheet";
+import { FormDialog } from "../components/FormDialog";
 import { moneyFmt } from "../lib/currency";
-import { jumpToAddForm } from "../lib/jumpToAddForm";
 import { AddSourceForm, CYCLE_OPTIONS, emptySourceDraft, incomeFromDraft, needsAnchor, sourceDraftErrors, type SourceDraft } from "../components/AddSourceForm";
 import { Hint, dismissHint, type HintId } from "../components/Hint";
 
 export default function IncomePage() {
   const hydrated = useHydrated();
-  const isMobile = useIsMobile();
   const [state, setState] = useState<BudgetState | null>(null);
   const [draft, setDraft] = useState<SourceDraft>(emptySourceDraft);
   const [addOpen, setAddOpen] = useState(false);
@@ -84,9 +81,8 @@ export default function IncomePage() {
     return (
       <section className="container" aria-busy="true">
         <header className="sheet page-head">
-          <p className="kicker">Income</p>
-          <h1 className="page-head__title">Income ledger</h1>
-          <p className="page-head__lead">Loading income entries…</p>
+          <h1 className="page-head__title">Income</h1>
+          <p className="page-head__lead">Loading income…</p>
         </header>
         <div className="sheet skeleton-card" aria-hidden="true">
           {[0, 1, 2].map((i) => (
@@ -107,8 +103,7 @@ export default function IncomePage() {
     <section className="container">
       {/* Page head */}
       <header className="sheet page-head">
-        <p className="kicker">Income</p>
-        <h1 className="page-head__title">Income ledger</h1>
+        <h1 className="page-head__title">Income</h1>
         <p className="page-head__lead">Track all your income sources. Each one's paycheck dates are calculated independently and feed into your period breakdown.</p>
         <details className="cycle-info">
           <summary><IconInfoCircle size={14} aria-hidden="true" />About pay cycle types</summary>
@@ -151,36 +146,37 @@ export default function IncomePage() {
         </article>
       </div>
 
-      {/* Ledger table */}
+      {/* Income table */}
       <div className="sheet table-card">
         <div className="table-card__head row-between mb-3">
           <div className="table-card__title">
-            <div>
-              <p className="kicker">Sources</p>
-              <h2 className="section-title">All inflow lines</h2>
-            </div>
+            <h2 className="section-title">All sources</h2>
             <SavedIndicator visible={saved.visible} />
           </div>
           <div className="table-card__actions">
-            <button
-              type="button"
-              className="btn mobile-only-inline btn--jump"
-              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
-            >
-              <IconPlus size={12} aria-hidden="true" />Add source
+            <button type="button" className="btn btn--add" onClick={() => setAddOpen(true)}>
+              <IconPlus size={14} aria-hidden="true" />Add income
             </button>
-            <span className="badge mobile-hidden">{state.incomes.length} sources</span>
+            {state.incomes.length > 0 && (
+              <span className="badge mobile-hidden">{state.incomes.length} {state.incomes.length === 1 ? "source" : "sources"}</span>
+            )}
           </div>
         </div>
 
+        {state.incomes.length === 0 ? (
+          <div className="table-empty">
+            <p className="table-empty__text">No income yet.</p>
+            <button type="button" className="btn" onClick={() => setAddOpen(true)}>Add your first income</button>
+          </div>
+        ) : (
         <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
           <table className="ledger-table ledger-table--responsive ledger-table--income">
             <thead>
               <tr>
                 <th>Source</th>
                 <th className="text-right">Amount</th>
-                <th>Cycle</th>
-                <th>Anchor / Days</th>
+                <th>Pay cycle</th>
+                <th>Last paycheck</th>
                 <th className="text-tight" />
               </tr>
             </thead>
@@ -208,7 +204,7 @@ export default function IncomePage() {
                       }
                     />
                   </td>
-                  <td data-label="Cycle">
+                  <td data-label="Pay cycle">
                     <select
                       className="select"
                       value={inc.payCycle}
@@ -226,7 +222,7 @@ export default function IncomePage() {
                       ))}
                     </select>
                   </td>
-                  <td data-label="Anchor">
+                  <td data-label="Last paycheck">
                     {needsAnchor(inc.payCycle) ? (
                       <input
                         className="input"
@@ -254,25 +250,19 @@ export default function IncomePage() {
             </tbody>
           </table>
         </div>
-
-        {/* Inline add form (desktop) */}
-        {!isMobile && (
-          <AddSourceForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={add} attempted={attempted} />
         )}
       </div>
 
-      {/* Mobile add sheet */}
-      {isMobile && addOpen && (
-        <BottomSheet open title="Add source" onClose={() => setAddOpen(false)}>
-          <AddSourceForm
-            inSheet
-            draft={draft}
-            setDraft={setDraft}
-            onAdd={() => { if (add()) setAddOpen(false); }}
-            attempted={attempted}
-          />
-        </BottomSheet>
-      )}
+      {/* "+ Add income": dialog on desktop, bottom sheet on mobile */}
+      <FormDialog open={addOpen} title="Add income" onClose={() => setAddOpen(false)}>
+        <AddSourceForm
+          inSheet
+          draft={draft}
+          setDraft={setDraft}
+          onAdd={() => { if (add()) setAddOpen(false); }}
+          attempted={attempted}
+        />
+      </FormDialog>
       <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </section>
   );

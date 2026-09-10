@@ -46,22 +46,17 @@ export function AddBillForm({
   setDraft,
   onAdd,
   attempted,
-  formId,
   inSheet,
   combinedDue,
-  narrow,
 }: {
   draft: BillFormDraft;
   setDraft: Dispatch<SetStateAction<BillFormDraft>>;
   onAdd: () => void;
   attempted?: boolean;
-  formId?: string;
-  /** Renders inside the mobile BottomSheet — drops the sunk background/padding. */
+  /** Renders inside FormDialog / BottomSheet — drops the sunk background/padding. */
   inSheet?: boolean;
   /** Merge due day + annual month into one field (narrow containers). */
   combinedDue?: boolean;
-  /** Two columns at every width (inside a period card). */
-  narrow?: boolean;
 }) {
   const errs = billDraftErrors(draft);
   const cols = combinedDue || draft.cadence !== "annual" ? " inline-form--4col" : " inline-form--5col";
@@ -93,9 +88,9 @@ export function AddBillForm({
     </select>
   );
   return (
-    <div id={formId} className={`inline-form${cols}${inSheet ? " inline-form--sheet" : ""}${narrow ? " inline-form--narrow" : ""}`}>
+    <div className={`inline-form${cols}${inSheet ? " inline-form--sheet" : ""}`}>
       <div className={`field${attempted && errs.name ? " field--has-error" : ""}`}>
-        <label className="field__label" htmlFor="bill-draft-name">New notation</label>
+        <label className="field__label" htmlFor="bill-draft-name">Name</label>
         <input
           id="bill-draft-name"
           className="input"
@@ -130,8 +125,9 @@ export function AddBillForm({
         )}
       </div>
       <div className="field">
-        <label className="field__label">Cadence</label>
+        <label className="field__label" htmlFor="bill-draft-cadence">Repeats</label>
         <select
+          id="bill-draft-cadence"
           className="select"
           value={draft.cadence}
           onChange={(e) => setDraft((d) => ({ ...d, cadence: e.target.value as "monthly" | "annual" }))}

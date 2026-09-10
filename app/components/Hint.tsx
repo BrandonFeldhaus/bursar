@@ -10,7 +10,7 @@ export const HINTS = {
   income: "Each source's paydays split the month into the paycheck periods on the Overview.",
   expenses: "Each bill lands in the paycheck period that covers its due day; annual bills are spread across the year.",
   budget: "Categories split each period's leftover after bills; fixed amounts come out first.",
-  goals: "Progress comes from the Overview: check a goal in a period card to apply its linked amount, or add an adjustment here for money from elsewhere.",
+  goals: "Progress comes from the Overview: tick a goal in a period card to add its funded amount, or add an adjustment here for money from elsewhere.",
   settings: "Your data lives only in this browser, so export a backup before erasing it or switching devices.",
 } as const;
 

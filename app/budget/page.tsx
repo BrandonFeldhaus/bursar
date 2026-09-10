@@ -10,9 +10,7 @@ import { moneyFmt } from "../lib/currency";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { AddCategoryForm, emptyCategoryDraft, type CategoryFormDraft } from "../components/AddCategoryForm";
-import { BottomSheet } from "../components/BottomSheet";
-import { jumpToAddForm } from "../lib/jumpToAddForm";
-import { useIsMobile } from "../lib/useIsMobile";
+import { FormDialog } from "../components/FormDialog";
 import { Hint, dismissHint, type HintId } from "../components/Hint";
 
 function AllocationRing({
@@ -79,7 +77,6 @@ const COLORS = Array.from({ length: 7 }, (_, i) => `var(--chart-${i + 1})`);
 
 export default function BudgetPage() {
   const hydrated = useHydrated();
-  const isMobile = useIsMobile();
   const [state, setState] = useState<BudgetState | null>(null);
   const [draft, setDraft] = useState<CategoryFormDraft>(emptyCategoryDraft);
   const [addOpen, setAddOpen] = useState(false);
@@ -174,9 +171,8 @@ export default function BudgetPage() {
     return (
       <section className="container" aria-busy="true">
         <header className="sheet page-head">
-          <p className="kicker">Budget</p>
-          <h1 className="page-head__title">Allocation plan</h1>
-          <p className="page-head__lead">Loading budget categories…</p>
+          <h1 className="page-head__title">Budget</h1>
+          <p className="page-head__lead">Loading budget…</p>
         </header>
         <div className="sheet skeleton-card" aria-hidden="true">
           {[0, 1, 2].map((i) => (
@@ -194,8 +190,7 @@ export default function BudgetPage() {
     <section className="container">
       {/* Page head */}
       <header className="sheet page-head">
-        <p className="kicker">Budget</p>
-        <h1 className="page-head__title">Allocation plan</h1>
+        <h1 className="page-head__title">Budget</h1>
         <p className="page-head__lead">Decide how each paycheck's leftover gets divided. Fixed amounts are reserved first; percentages split whatever remains.</p>
       </header>
 
@@ -229,7 +224,6 @@ export default function BudgetPage() {
             sublabel="of remainder"
           />
           <div>
-            <p className="kicker">Distribution</p>
             <h2 className="section-title mb-3">Where each dollar goes</h2>
             <div className="allocation-list">
               {segments.map((s, i) => (
@@ -254,25 +248,29 @@ export default function BudgetPage() {
         </div>
       </div>
 
-      {/* Budget entries table */}
+      {/* Categories table */}
       <div className="sheet table-card">
         <div className="table-card__head row-between mb-3">
-          <div>
-            <p className="kicker">Categories</p>
-            <h2 className="section-title">Budget entries</h2>
+          <div className="table-card__title">
+            <h2 className="section-title">Categories</h2>
+            <SavedIndicator visible={savedIndicator.visible} />
           </div>
           <div className="table-card__actions">
-            <button
-              type="button"
-              className="btn mobile-only-inline btn--jump"
-              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
-            >
-              <IconPlus size={12} aria-hidden="true" />Add category
+            <button type="button" className="btn btn--add" onClick={() => setAddOpen(true)}>
+              <IconPlus size={14} aria-hidden="true" />Add category
             </button>
-            <span className={`badge mobile-hidden${overdrawn ? " badge--red" : ""}`}>{percentTotal.toFixed(0)}% of remainder</span>
+            {cats.length > 0 && (
+              <span className={`badge mobile-hidden${overdrawn ? " badge--red" : ""}`}>{percentTotal.toFixed(0)}% of remainder</span>
+            )}
           </div>
         </div>
 
+        {cats.length === 0 ? (
+          <div className="table-empty">
+            <p className="table-empty__text">No categories yet.</p>
+            <button type="button" className="btn" onClick={() => setAddOpen(true)}>Add your first category</button>
+          </div>
+        ) : (
         <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
           <table className="ledger-table ledger-table--responsive ledger-table--budget">
             <thead>
@@ -287,12 +285,13 @@ export default function BudgetPage() {
               {cats.map((c) => (
                   <tr key={c.id}>
                     <td data-label="Category">
-                      <input className="input" value={c.name} onChange={(e) => update(c.id, { name: e.target.value })} />
+                      <input className="input" value={c.name} aria-label="Category name" onChange={(e) => update(c.id, { name: e.target.value })} />
                     </td>
                     <td data-label="Type">
                       <select
                         className="select"
                         value={c.mode}
+                        aria-label="Category type"
                         onChange={(e) => update(c.id, { mode: e.target.value as "percent" | "fixed" })}
                       >
                         <option value="percent">Percent</option>
@@ -305,6 +304,7 @@ export default function BudgetPage() {
                         type="text"
                         inputMode="decimal"
                         value={c.value}
+                        aria-label="Category value"
                         onChange={(e) =>
                           update(c.id, { value: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) })
                         }
@@ -321,28 +321,20 @@ export default function BudgetPage() {
             </tbody>
           </table>
         </div>
-
-        {/* Inline add form (desktop) */}
-        {!isMobile && (
-          <AddCategoryForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={add} attempted={attempted} />
         )}
       </div>
 
-      {/* Mobile add sheet */}
-      {isMobile && addOpen && (
-        <BottomSheet open title="Add category" onClose={() => setAddOpen(false)}>
-          <AddCategoryForm
-            inSheet
-            draft={draft}
-            setDraft={setDraft}
-            onAdd={() => { if (add()) setAddOpen(false); }}
-            attempted={attempted}
-          />
-        </BottomSheet>
-      )}
+      {/* "+ Add category": dialog on desktop, bottom sheet on mobile */}
+      <FormDialog open={addOpen} title="Add category" onClose={() => setAddOpen(false)}>
+        <AddCategoryForm
+          inSheet
+          draft={draft}
+          setDraft={setDraft}
+          onAdd={() => { if (add()) setAddOpen(false); }}
+          attempted={attempted}
+        />
+      </FormDialog>
 
-      {/* SavedIndicator and UndoToast */}
-      <SavedIndicator visible={savedIndicator.visible} />
       <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </section>
   );

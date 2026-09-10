@@ -6,11 +6,20 @@ import { loadState, newId, saveState, type BudgetState, type Goal } from "../lib
 import { useHydrated } from "../lib/useHydrated";
 import { useIsMobile } from "../lib/useIsMobile";
 import { moneyFmt } from "../lib/currency";
+import { computeAllocations } from "../lib/allocations";
+import {
+  currentPeriod,
+  fundingCandidates,
+  goalFundingSources,
+  paychecksToGo,
+  type FundingSource,
+} from "../lib/goalFunding";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { BottomSheet } from "../components/BottomSheet";
-import { AddGoalForm, emptyGoalDraft, type DraftGoal } from "../components/AddGoalForm";
-import { jumpToAddForm } from "../lib/jumpToAddForm";
+import { FormDialog } from "../components/FormDialog";
+import { FundingPicker } from "../components/FundingPicker";
+import { AddGoalForm, emptyGoalDraft, goalDraftErrors, goalFromDraft, type DraftGoal } from "../components/AddGoalForm";
 import { toISODate } from "../lib/month";
 import { formatAdjustmentDate, sortAdjustmentsForDisplay } from "../lib/goalAdjustments";
 import { Hint, dismissHint, type HintId } from "../components/Hint";
@@ -40,10 +49,25 @@ function parseAdjAmount(raw: string): number {
 
 type AdjSign = 1 | -1;
 
+/** Names of the goal's funding sources, for the badges in the cards and the table. */
+function FundingBadges({ goal, candidates }: { goal: Goal; candidates: FundingSource[] }) {
+  const sources = goalFundingSources(goal, candidates);
+  return (
+    <div className="goal-links">
+      {sources.length === 0
+        ? <span className="goal-links__none">Not funded</span>
+        : sources.map((s) => <span key={`${s.kind}:${s.id}`} className="badge badge--sm">{s.name}</span>)}
+    </div>
+  );
+}
+
+/**
+ * Expanded editor for one goal — an inline table row on desktop, the bottom sheet on
+ * mobile. Two stacked sections: "Funded by" (chips + picker) and "Adjustments".
+ */
 function GoalEditor({
   goal,
-  budgetCategories,
-  recurringExpenses,
+  candidates,
   onUpdate,
   adjAmount,
   setAdjAmount,
@@ -55,11 +79,9 @@ function GoalEditor({
   onRemoveAdjustment,
   showAllAdj,
   onToggleShowAllAdj,
-  inSheet,
 }: {
   goal: Goal;
-  budgetCategories: { id: string; name: string }[];
-  recurringExpenses: { id: string; name: string }[];
+  candidates: FundingSource[];
   onUpdate: (patch: Partial<Goal>) => void;
   adjAmount: string;
   setAdjAmount: Dispatch<SetStateAction<string>>;
@@ -71,164 +93,183 @@ function GoalEditor({
   onRemoveAdjustment: (adjId: string) => void;
   showAllAdj: boolean;
   onToggleShowAllAdj: () => void;
-  inSheet?: boolean;
 }) {
+  const sources = goalFundingSources(goal, candidates);
+  const perPaycheck = sources.reduce((s, x) => s + x.amount, 0);
+  const remaining = Math.max(0, goal.targetAmount - goalTotalApplied(goal));
+  const toGo = paychecksToGo(remaining, perPaycheck);
+
+  const isAdded = (s: FundingSource) =>
+    s.kind === "category" ? goal.linkedBudgetCategoryIds.includes(s.id) : goal.linkedExpenseIds.includes(s.id);
+
+  function addSource(s: FundingSource) {
+    if (isAdded(s)) return;
+    if (s.kind === "category") onUpdate({ linkedBudgetCategoryIds: [...goal.linkedBudgetCategoryIds, s.id] });
+    else onUpdate({ linkedExpenseIds: [...goal.linkedExpenseIds, s.id] });
+  }
+
+  function removeSource(s: FundingSource) {
+    if (s.kind === "category") onUpdate({ linkedBudgetCategoryIds: goal.linkedBudgetCategoryIds.filter((id) => id !== s.id) });
+    else onUpdate({ linkedExpenseIds: goal.linkedExpenseIds.filter((id) => id !== s.id) });
+  }
+
   const sortedAdj = sortAdjustmentsForDisplay(goal.manualAdjustments);
   const visibleAdj = showAllAdj ? sortedAdj : sortedAdj.slice(0, RECENT_ADJ_COUNT);
+
   return (
-    <>
-      {/* Links section */}
-      <p className="kicker goal-editor__kicker">{inSheet ? "Links" : `Links — ${goal.name}`}</p>
-      <div className="link-check-list goal-editor__links">
-        {budgetCategories.length === 0 && recurringExpenses.length === 0 && (
-          <span className="goal-editor__empty">No budget categories or bills set up yet.</span>
-        )}
-        {budgetCategories.map((c) => {
-          const checked = goal.linkedBudgetCategoryIds.includes(c.id);
-          return (
-            <label key={c.id} className="link-check">
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() =>
-                  onUpdate({
-                    linkedBudgetCategoryIds: checked
-                      ? goal.linkedBudgetCategoryIds.filter((id) => id !== c.id)
-                      : [...goal.linkedBudgetCategoryIds, c.id],
-                  })
-                }
-                className="link-check__box"
-              />
-              {c.name}
-            </label>
-          );
-        })}
-        {recurringExpenses.map((e) => {
-          const checked = goal.linkedExpenseIds.includes(e.id);
-          return (
-            <label key={e.id} className="link-check">
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() =>
-                  onUpdate({
-                    linkedExpenseIds: checked
-                      ? goal.linkedExpenseIds.filter((id) => id !== e.id)
-                      : [...goal.linkedExpenseIds, e.id],
-                  })
-                }
-                className="link-check__box"
-              />
-              {e.name}
-            </label>
-          );
-        })}
-      </div>
-      {/* Adjustments section */}
-      <p className="kicker goal-editor__kicker">Adjustments</p>
-      {sortedAdj.length > 0 ? (
-        <>
-          <div className={`goal-editor__adj-list${sortedAdj.length > RECENT_ADJ_COUNT ? " goal-editor__adj-list--more" : ""}${showAllAdj ? " goal-editor__adj-list--scroll" : ""}`}>
-            {visibleAdj.map((a) => (
-              <div key={a.id} className="goal-editor__adj">
-                <span className="goal-editor__adj-date">
-                  {a.date ? formatAdjustmentDate(a.date) : "—"}
-                </span>
-                <span className={`goal-editor__adj-amount${a.amount < 0 ? " goal-editor__adj-amount--neg" : ""}`}>
-                  {a.amount > 0 ? "+" : ""}{moneyFmt(a.amount)}
-                </span>
-                {a.note
-                  ? <span className="goal-editor__adj-note">{a.note}</span>
-                  : <span className="goal-editor__adj-note goal-editor__adj-note--empty">—</span>
-                }
+    <div className="goal-editor">
+      <section className="goal-editor__section">
+        <h4 className="goal-editor__heading">Funded by</h4>
+        <p className="goal-editor__explainer">When you tick this goal on a paycheck period, these amounts count toward it.</p>
+
+        {sources.length > 0 ? (
+          <ul className="funding-chips">
+            {sources.map((s) => (
+              <li key={`${s.kind}:${s.id}`} className="funding-chip">
+                <span className="funding-chip__name">{s.name}</span>
+                <span className="funding-chip__amount">{moneyFmt(s.amount)}</span>
                 <button
-                  className="btn btn--icon goal-editor__adj-remove"
                   type="button"
-                  onClick={() => onRemoveAdjustment(a.id)}
-                  aria-label="Remove adjustment"
+                  className="funding-chip__remove"
+                  aria-label={`Remove ${s.name}`}
+                  onClick={() => removeSource(s)}
                 >
-                  <IconX size={16} aria-hidden="true" />
+                  <IconX size={14} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="goal-editor__none">Not funded yet.</p>
+        )}
+
+        {perPaycheck > 0 && (
+          <p className="funding-total">
+            <span className="funding-total__amount">≈ {moneyFmt(perPaycheck)} per paycheck</span>
+            {toGo !== null && (
+              <span className="funding-total__estimate">about {toGo} {toGo === 1 ? "paycheck" : "paychecks"} to go</span>
+            )}
+          </p>
+        )}
+
+        {candidates.length > 0 ? (
+          <FundingPicker goalType={goal.type} candidates={candidates} isAdded={isAdded} onAdd={addSource} />
+        ) : (
+          <p className="goal-editor__none">Add budget categories or bills first, then fund this goal from them.</p>
+        )}
+      </section>
+
+      <div className="goal-editor__divider" role="presentation" />
+
+      <section className="goal-editor__section">
+        <h4 className="goal-editor__heading">Adjustments</h4>
+        <p className="goal-editor__explainer">Money added or taken out that did not come from a paycheck period.</p>
+        {sortedAdj.length > 0 ? (
+          <>
+            <div className={`goal-editor__adj-list${sortedAdj.length > RECENT_ADJ_COUNT ? " goal-editor__adj-list--more" : ""}${showAllAdj ? " goal-editor__adj-list--scroll" : ""}`}>
+              {visibleAdj.map((a) => (
+                <div key={a.id} className="goal-editor__adj">
+                  <span className="goal-editor__adj-date">
+                    {a.date ? formatAdjustmentDate(a.date) : "—"}
+                  </span>
+                  <span className={`goal-editor__adj-amount${a.amount < 0 ? " goal-editor__adj-amount--neg" : ""}`}>
+                    {a.amount > 0 ? "+" : ""}{moneyFmt(a.amount)}
+                  </span>
+                  {a.note
+                    ? <span className="goal-editor__adj-note">{a.note}</span>
+                    : <span className="goal-editor__adj-note goal-editor__adj-note--empty">—</span>
+                  }
+                  <button
+                    className="btn btn--icon goal-editor__adj-remove"
+                    type="button"
+                    onClick={() => onRemoveAdjustment(a.id)}
+                    aria-label="Remove adjustment"
+                  >
+                    <IconX size={16} aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {sortedAdj.length > RECENT_ADJ_COUNT && (
+              <button
+                className="btn btn--ghost goal-editor__toggle"
+                type="button"
+                onClick={onToggleShowAllAdj}
+              >
+                {showAllAdj ? "Show recent" : `Show all (${sortedAdj.length})`}
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="goal-editor__none">No adjustments yet.</p>
+        )}
+        <div className="inline-form inline-form--2col inline-form--bare">
+          <div className="field">
+            <label className="field__label" htmlFor={`adj-amount-${goal.id}`}>Amount</label>
+            <div className="goal-editor__amount-row">
+              <div className="segment segment--sign" role="radiogroup" aria-label="Add or subtract">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={adjSign === 1}
+                  aria-label="Add to goal"
+                  className={`segment__btn segment__btn--sign${adjSign === 1 ? " segment__btn--active" : ""}`}
+                  onClick={() => setAdjSign(1)}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={adjSign === -1}
+                  aria-label="Subtract from goal"
+                  className={`segment__btn segment__btn--sign${adjSign === -1 ? " segment__btn--active" : ""}`}
+                  onClick={() => setAdjSign(-1)}
+                >
+                  −
                 </button>
               </div>
-            ))}
-          </div>
-          {sortedAdj.length > RECENT_ADJ_COUNT && (
-            <button
-              className="btn btn--ghost goal-editor__toggle"
-              type="button"
-              onClick={onToggleShowAllAdj}
-            >
-              {showAllAdj ? "Show recent" : `Show all (${sortedAdj.length})`}
-            </button>
-          )}
-        </>
-      ) : (
-        <p className="goal-editor__none">No manual adjustments yet.</p>
-      )}
-      <div className="inline-form inline-form--2col inline-form--bare">
-        <div className="field">
-          <label className="field__label">Amount</label>
-          <div className="goal-editor__amount-row">
-            <div className="segment segment--sign" role="radiogroup" aria-label="Add or subtract">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={adjSign === 1}
-                aria-label="Add to goal"
-                className={`segment__btn segment__btn--sign${adjSign === 1 ? " segment__btn--active" : ""}`}
-                onClick={() => setAdjSign(1)}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={adjSign === -1}
-                aria-label="Subtract from goal"
-                className={`segment__btn segment__btn--sign${adjSign === -1 ? " segment__btn--active" : ""}`}
-                onClick={() => setAdjSign(-1)}
-              >
-                −
-              </button>
+              <input
+                id={`adj-amount-${goal.id}`}
+                className="input input--mono goal-editor__amount-input"
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9.]*"
+                placeholder="e.g. 500"
+                value={adjAmount}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (/[-−]/.test(raw)) setAdjSign(-1);
+                  else if (/\+/.test(raw)) setAdjSign(1);
+                  setAdjAmount(raw.replace(/[^0-9.]/g, ""));
+                }}
+                onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
+              />
             </div>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor={`adj-note-${goal.id}`}>Note (optional)</label>
             <input
-              className="input input--mono goal-editor__amount-input"
+              id={`adj-note-${goal.id}`}
+              className="input"
               type="text"
-              inputMode="decimal"
-              pattern="[0-9.]*"
-              placeholder="e.g. 500"
-              value={adjAmount}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (/[-−]/.test(raw)) setAdjSign(-1);
-                else if (/\+/.test(raw)) setAdjSign(1);
-                setAdjAmount(raw.replace(/[^0-9.]/g, ""));
-              }}
+              placeholder="e.g. Emergency withdrawal"
+              value={adjNote}
+              onChange={(e) => setAdjNote(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
             />
           </div>
+          <button
+            className="btn"
+            type="button"
+            onClick={onAddAdjustment}
+            disabled={!adjAmount.trim() || isNaN(parseAdjAmount(adjAmount)) || parseAdjAmount(adjAmount) === 0}
+          >
+            Add adjustment
+          </button>
         </div>
-        <div className="field">
-          <label className="field__label">Note (optional)</label>
-          <input
-            className="input"
-            type="text"
-            placeholder="e.g. Emergency withdrawal"
-            value={adjNote}
-            onChange={(e) => setAdjNote(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
-          />
-        </div>
-        <button
-          className="btn"
-          type="button"
-          onClick={onAddAdjustment}
-          disabled={!adjAmount.trim() || isNaN(parseAdjAmount(adjAmount)) || parseAdjAmount(adjAmount) === 0}
-        >
-          Apply
-        </button>
-      </div>
-    </>
+      </section>
+    </div>
   );
 }
 
@@ -257,29 +298,28 @@ export default function GoalsPage() {
     saveState(state);
   }, [hydrated, state]);
 
+  /** Open (or close) a goal's editor with a clean adjustment form. */
+  function openEditor(id: string | null) {
+    setExpandedGoalId(id);
+    setAdjAmount("");
+    setAdjSign(1);
+    setAdjNote("");
+    setAdjShowAll(false);
+  }
+
   function addGoal(): boolean {
-    const name = draft.name.trim();
-    if (!name || draft.targetAmount <= 0) {
+    const errs = goalDraftErrors(draft);
+    if (errs.name || errs.target) {
       setAttempted(true);
       return false;
     }
-    setState((s) => {
-      if (!s) return s;
-      const newGoal: Goal = {
-        id: newId(),
-        name,
-        type: draft.type,
-        targetAmount: draft.targetAmount,
-        linkedBudgetCategoryIds: draft.linkedBudgetCategoryIds,
-        linkedExpenseIds: draft.linkedExpenseIds,
-        manualAdjustments: [],
-        appliedPeriods: [],
-      };
-      return { ...s, goals: [...s.goals, newGoal] };
-    });
+    const newGoal = goalFromDraft(draft);
+    setState((s) => (s ? { ...s, goals: [...s.goals, newGoal] } : s));
     setDraft(emptyGoalDraft);
     setAttempted(false);
     savedIndicator.flash();
+    // Straight into the editor so funding can be set right away.
+    openEditor(newGoal.id);
     return true;
   }
 
@@ -355,24 +395,21 @@ export default function GoalsPage() {
     savedIndicator.flash();
   }
 
-  const derived = useMemo(() => {
-    if (!state) return { totalApplied: 0, completed: 0 };
-    let totalApplied = 0;
-    let completed = 0;
-    for (const g of state.goals) {
-      const applied = goalTotalApplied(g);
-      totalApplied += applied;
-      if (applied >= g.targetAmount) completed++;
-    }
-    return { totalApplied, completed };
+  // What each category and bill comes to in the paycheck period that contains today —
+  // the amounts shown in the picker, the chips, and the per-paycheck total.
+  const candidates = useMemo((): FundingSource[] => {
+    if (!state) return [];
+    const period = currentPeriod(state);
+    if (!period) return [];
+    const allocations = computeAllocations(period.leftover, state.budgetCategories);
+    return fundingCandidates(allocations, period.bills, state.recurringExpenses);
   }, [state]);
 
   if (!hydrated || !state) {
     return (
       <section className="container" aria-busy="true">
         <header className="sheet page-head">
-          <p className="kicker">Goals</p>
-          <h1 className="page-head__title">Goals &amp; Targets</h1>
+          <h1 className="page-head__title">Goals</h1>
           <p className="page-head__lead">Loading goals…</p>
         </header>
         <div className="sheet skeleton-card" aria-hidden="true">
@@ -384,18 +421,34 @@ export default function GoalsPage() {
     );
   }
 
-  const { goals, budgetCategories, recurringExpenses } = state;
-  const { totalApplied, completed } = derived;
+  const { goals } = state;
   const expandedGoal = goals.find((g) => g.id === expandedGoalId) ?? null;
+
+  const editorFor = (g: Goal) => (
+    <GoalEditor
+      goal={g}
+      candidates={candidates}
+      onUpdate={(patch) => updateGoal(g.id, patch)}
+      adjAmount={adjAmount}
+      setAdjAmount={setAdjAmount}
+      adjSign={adjSign}
+      setAdjSign={setAdjSign}
+      adjNote={adjNote}
+      setAdjNote={setAdjNote}
+      onAddAdjustment={() => addManualAdjustment(g.id)}
+      onRemoveAdjustment={(adjId) => removeManualAdjustment(g.id, adjId)}
+      showAllAdj={adjShowAll}
+      onToggleShowAllAdj={() => setAdjShowAll((v) => !v)}
+    />
+  );
 
   return (
     <section className="container">
       {/* Page head */}
       <header className="sheet page-head">
-        <p className="kicker">Goals</p>
-        <h1 className="page-head__title">Goals &amp; Targets</h1>
+        <h1 className="page-head__title">Goals</h1>
         <p className="page-head__lead">
-          Track savings targets and debt payoff progress. Link a goal to budget categories or bills so the Overview can apply contributions each paycheck.
+          Track a savings target or a debt payoff. Fund a goal from budget categories or bills, then tick it on a paycheck period to add that amount.
         </p>
       </header>
 
@@ -408,12 +461,6 @@ export default function GoalsPage() {
             const applied = goalTotalApplied(g);
             const pct = g.targetAmount > 0 ? (applied / g.targetAmount) * 100 : 0;
             const remaining = Math.max(0, g.targetAmount - applied);
-            const linkedCats = g.linkedBudgetCategoryIds
-              .map((id) => budgetCategories.find((c) => c.id === id))
-              .filter(Boolean) as { id: string; name: string }[];
-            const linkedExps = g.linkedExpenseIds
-              .map((id) => recurringExpenses.find((e) => e.id === id))
-              .filter(Boolean) as { id: string; name: string }[];
 
             return (
               <div key={g.id} className="sheet goal-card">
@@ -450,15 +497,7 @@ export default function GoalsPage() {
                 </div>
 
                 <div className="goal-card__footer">
-                  <div className="goal-links">
-                    {linkedCats.length === 0 && linkedExps.length === 0
-                      ? <span className="badge badge--sm badge--faint">No link</span>
-                      : <>
-                          {linkedCats.map((c) => <span key={`cat:${c.id}`} className="badge badge--sm">{c.name}</span>)}
-                          {linkedExps.map((e) => <span key={`exp:${e.id}`} className="badge badge--sm">{e.name}</span>)}
-                        </>
-                    }
-                  </div>
+                  <FundingBadges goal={g} candidates={candidates} />
                   {remaining > 0 && (
                     <span className="goal-card__remaining">
                       {moneyFmt(remaining)} to go
@@ -471,29 +510,16 @@ export default function GoalsPage() {
         </div>
       )}
 
-      {goals.length === 0 && (
-        <div className="sheet goals-empty">
-          <p className="kicker">No goals yet</p>
-          <p className="goals-empty__text">
-            Add a savings or debt payoff goal below to start tracking your progress.
-          </p>
-        </div>
-      )}
-
       {/* Management table */}
       {goals.length > 0 && (
         <div className="sheet table-card">
           <div className="table-card__head row-between mb-3">
-            <div>
-              <p className="kicker">Manage</p>
+            <div className="table-card__title">
               <h2 className="section-title">All goals</h2>
+              <SavedIndicator visible={savedIndicator.visible} />
             </div>
-            <button
-              type="button"
-              className="btn mobile-only-inline btn--jump"
-              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
-            >
-              <IconPlus size={12} aria-hidden="true" />Add goal
+            <button type="button" className="btn btn--add" onClick={() => setAddOpen(true)}>
+              <IconPlus size={14} aria-hidden="true" />Add goal
             </button>
           </div>
           <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
@@ -504,7 +530,7 @@ export default function GoalsPage() {
                   <th>Type</th>
                   <th className="text-right">Target</th>
                   <th>Applied</th>
-                  <th>Linked to</th>
+                  <th>Funded by</th>
                   <th className="text-tight" />
                 </tr>
               </thead>
@@ -520,6 +546,7 @@ export default function GoalsPage() {
                           <input
                             className="input"
                             value={g.name}
+                            aria-label="Goal name"
                             onChange={(e) => updateGoal(g.id, { name: e.target.value })}
                           />
                           <div className="goal-row-progress" aria-hidden="true">
@@ -534,6 +561,7 @@ export default function GoalsPage() {
                           <select
                             className="select"
                             value={g.type}
+                            aria-label="Goal type"
                             onChange={(e) => updateGoal(g.id, { type: e.target.value as "savings" | "debt" })}
                           >
                             <option value="savings">Savings</option>
@@ -547,6 +575,7 @@ export default function GoalsPage() {
                             inputMode="decimal"
                             pattern="[0-9.]*"
                             value={g.targetAmount || ""}
+                            aria-label="Target amount"
                             onChange={(e) =>
                               updateGoal(g.id, {
                                 targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0),
@@ -555,35 +584,18 @@ export default function GoalsPage() {
                           />
                         </td>
                         <td className="mono" data-label="Applied">{moneyFmt(applied)}</td>
-                        <td data-label="Linked to">
-                          <div className="goal-links">
-                            {g.linkedBudgetCategoryIds.map((id) => {
-                              const cat = budgetCategories.find((c) => c.id === id);
-                              return cat ? <span key={id} className="badge badge--sm">{cat.name}</span> : null;
-                            })}
-                            {g.linkedExpenseIds.map((id) => {
-                              const exp = recurringExpenses.find((e) => e.id === id);
-                              return exp ? <span key={id} className="badge badge--sm">{exp.name}</span> : null;
-                            })}
-                            {g.linkedBudgetCategoryIds.length === 0 && g.linkedExpenseIds.length === 0 && (
-                              <span className="goal-links__none">None</span>
-                            )}
-                          </div>
+                        <td data-label="Funded by">
+                          <FundingBadges goal={g} candidates={candidates} />
                         </td>
                         <td className="text-tight">
                           <div className="goal-row__actions">
                             <button
                               className={`btn btn--ghost goal-row__edit${isExpanded ? " goal-row__edit--active" : ""}`}
                               type="button"
-                              title="Edit links &amp; adjustments"
+                              title="Edit funding and adjustments"
                               aria-label={`Edit ${g.name}`}
-                              onClick={() => {
-                                setExpandedGoalId(isExpanded ? null : g.id);
-                                setAdjAmount("");
-                                setAdjSign(1);
-                                setAdjNote("");
-                                setAdjShowAll(false);
-                              }}
+                              aria-expanded={isExpanded}
+                              onClick={() => openEditor(isExpanded ? null : g.id)}
                             >
                               Edit
                             </button>
@@ -601,22 +613,7 @@ export default function GoalsPage() {
                       {isExpanded && !isMobile && (
                         <tr>
                           <td colSpan={6} className="goal-row__editor-cell">
-                            <GoalEditor
-                              goal={g}
-                              budgetCategories={budgetCategories}
-                              recurringExpenses={recurringExpenses}
-                              onUpdate={(patch) => updateGoal(g.id, patch)}
-                              adjAmount={adjAmount}
-                              setAdjAmount={setAdjAmount}
-                              adjSign={adjSign}
-                              setAdjSign={setAdjSign}
-                              adjNote={adjNote}
-                              setAdjNote={setAdjNote}
-                              onAddAdjustment={() => addManualAdjustment(g.id)}
-                              onRemoveAdjustment={(adjId) => removeManualAdjustment(g.id, adjId)}
-                              showAllAdj={adjShowAll}
-                              onToggleShowAllAdj={() => setAdjShowAll((v) => !v)}
-                            />
+                            {editorFor(g)}
                           </td>
                         </tr>
                       )}
@@ -626,37 +623,30 @@ export default function GoalsPage() {
               </tbody>
             </table>
           </div>
-          {!isMobile && (
-            <AddGoalForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={addGoal} budgetCategories={budgetCategories} recurringExpenses={recurringExpenses} attempted={attempted} />
-          )}
         </div>
       )}
 
-      {/* Add form when no goals yet */}
+      {/* Empty state: the form stays inline so the page has an action */}
       {goals.length === 0 && (
         <div className="sheet table-card">
           <div className="table-card__head mb-3">
-            <p className="kicker">New goal</p>
             <h2 className="section-title">Add your first goal</h2>
+            <p className="muted">A savings target or a debt to pay off. Once it exists you can fund it from budget categories or bills.</p>
           </div>
-          <AddGoalForm draft={draft} setDraft={setDraft} onAdd={addGoal} budgetCategories={budgetCategories} recurringExpenses={recurringExpenses} attempted={attempted} />
+          <AddGoalForm draft={draft} setDraft={setDraft} onAdd={addGoal} attempted={attempted} />
         </div>
       )}
 
-      {/* Mobile add sheet — same form the desktop inline block uses */}
-      {isMobile && addOpen && (
-        <BottomSheet open title="Add goal" onClose={() => setAddOpen(false)}>
-          <AddGoalForm
-            inSheet
-            draft={draft}
-            setDraft={setDraft}
-            onAdd={() => { if (addGoal()) setAddOpen(false); }}
-            budgetCategories={budgetCategories}
-            recurringExpenses={recurringExpenses}
-            attempted={attempted}
-          />
-        </BottomSheet>
-      )}
+      {/* "+ Add goal": dialog on desktop, bottom sheet on mobile */}
+      <FormDialog open={addOpen} title="Add goal" onClose={() => setAddOpen(false)}>
+        <AddGoalForm
+          inSheet
+          draft={draft}
+          setDraft={setDraft}
+          onAdd={() => { if (addGoal()) setAddOpen(false); }}
+          attempted={attempted}
+        />
+      </FormDialog>
 
       {/* Mobile edit sheet — same editor the desktop inline row uses */}
       {isMobile && expandedGoal && (
@@ -665,23 +655,7 @@ export default function GoalsPage() {
           title={`Edit — ${expandedGoal.name || "goal"}`}
           onClose={() => setExpandedGoalId(null)}
         >
-          <GoalEditor
-            goal={expandedGoal}
-            budgetCategories={budgetCategories}
-            recurringExpenses={recurringExpenses}
-            onUpdate={(patch) => updateGoal(expandedGoal.id, patch)}
-            adjAmount={adjAmount}
-            setAdjAmount={setAdjAmount}
-            adjSign={adjSign}
-            setAdjSign={setAdjSign}
-            adjNote={adjNote}
-            setAdjNote={setAdjNote}
-            onAddAdjustment={() => addManualAdjustment(expandedGoal.id)}
-            onRemoveAdjustment={(adjId) => removeManualAdjustment(expandedGoal.id, adjId)}
-            showAllAdj={adjShowAll}
-            onToggleShowAllAdj={() => setAdjShowAll((v) => !v)}
-            inSheet
-          />
+          {editorFor(expandedGoal)}
         </BottomSheet>
       )}
 
