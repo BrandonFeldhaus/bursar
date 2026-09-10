@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { IconPlus, IconX } from "@tabler/icons-react";
-import { loadState, newId, saveState, type BudgetState, type RecurringExpense } from "../lib/storage";
+import { loadState, saveState, type BudgetState, type RecurringExpense } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
 import {
   currentMonthKey,
@@ -16,7 +16,8 @@ import {
 } from "../lib/month";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
-import { AddBillForm, billDraftErrors, emptyBillDraft, type BillFormDraft } from "../components/AddBillForm";
+import { AddBillForm, billDraftErrors, emptyBillDraft, expenseFromDraft, type BillFormDraft } from "../components/AddBillForm";
+import { Hint, dismissHint, type HintId } from "../components/Hint";
 import { BottomSheet } from "../components/BottomSheet";
 import { moneyFmt, moneyShort } from "../lib/currency";
 import { jumpToAddForm } from "../lib/jumpToAddForm";
@@ -178,6 +179,10 @@ export default function ExpensesPage() {
     saveState(state);
   }, [hydrated, state]);
 
+  function dismiss(id: HintId) {
+    setState((s) => (s ? dismissHint(s, id) : s));
+  }
+
   function update(id: string, patch: Partial<RecurringExpense>) {
     setState((s) => s ? { ...s, recurringExpenses: s.recurringExpenses.map((e) => (e.id === id ? { ...e, ...patch } : e)) } : s);
     saved.flash();
@@ -213,25 +218,8 @@ export default function ExpensesPage() {
       setAttempted(true);
       return false;
     }
-    const name = draft.name.trim();
-    setState((s) => {
-      if (!s) return s;
-      return {
-        ...s,
-        recurringExpenses: [
-          ...s.recurringExpenses,
-          {
-            id: newId(),
-            name,
-            amount: Math.max(0, errs.parsedAmount),
-            cadence: draft.cadence,
-            dueDay: draft.dueDay,
-            dueMonth: draft.dueMonth,
-            paidPeriods: [],
-          },
-        ],
-      };
-    });
+    const expense = expenseFromDraft(draft, errs);
+    setState((s) => (s ? { ...s, recurringExpenses: [...s.recurringExpenses, expense] } : s));
     setDraft(emptyBillDraft);
     setAttempted(false);
     saved.flash();
@@ -277,6 +265,8 @@ export default function ExpensesPage() {
         <h1 className="page-head__title">Bill notations</h1>
         <p className="page-head__lead">Log your recurring bills here. Annual expenses are divided across 12 months so every period shares the cost evenly.</p>
       </header>
+
+      <Hint id="expenses" hints={state.meta.hints} onDismiss={dismiss} />
 
       {/* Stats row */}
       <div className="stat-row">

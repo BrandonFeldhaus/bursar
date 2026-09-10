@@ -3,7 +3,6 @@ import Script from "next/script";
 import "./globals.css";
 import { SiteHeader } from "./components/SiteHeader";
 import { BottomNav } from "./components/BottomNav";
-import { OnboardingGate } from "./components/OnboardingGate";
 
 export const metadata: Metadata = {
   title: "Bursar",
@@ -25,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteHeader />
 
         <main id="main" className="main">
-          <OnboardingGate>{children}</OnboardingGate>
+          {children}
         </main>
 
         <footer className="footer" aria-label="Footer">

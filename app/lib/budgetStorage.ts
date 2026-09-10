@@ -84,9 +84,14 @@ export type BudgetState = {
     paycheckAmount: number;
   };
   meta: {
+    /** Kept for import compatibility; nothing reads it for routing any more. */
     onboardingComplete: boolean;
     version: 1;
     createdAt: string;
+    /** Ids of the one-line hints the user has dismissed (see components/Hint.tsx). */
+    hints: string[];
+    /** True while the store holds the bundled sample ledger (lib/sampleData.ts). */
+    demo?: boolean;
   };
   incomeMonthly: number;
   payCycle: PayCycle;
@@ -113,6 +118,8 @@ export function defaultBudget(overrides?: Partial<BudgetState>): BudgetState {
       onboardingComplete: false,
       version: 1,
       createdAt: new Date().toISOString(),
+      hints: [],
+      demo: false,
     },
     incomeMonthly: 0,
     payCycle: "biweekly",
@@ -237,15 +244,28 @@ function normalizeGoals(raw: any[]): Goal[] {
     .filter((g: Goal) => g.name.trim().length > 0);
 }
 
+function normalizeIncomes(raw: any[]): Income[] {
+  return raw.map((inc: any) => ({
+    ...inc,
+    payCycle: coercePayCycle(inc?.payCycle),
+  }));
+}
+
+// A snapshot stores DEFINITIONS only (incomes, bills, categories, goal targets and links).
+// FACTS — paidPeriods on an expense, appliedPeriods and manualAdjustments on a goal — are
+// keyed by periodId and always read from live state, so any copies found in a legacy
+// snapshot (written by the old manual Lock/Archive flow) are accepted and then emptied.
 function normalizeLockedMonths(raw: any[]): LockedMonth[] {
   return raw
     .map((lm: any) => ({
       monthKey: typeof lm?.monthKey === "string" ? lm.monthKey : "",
       lockedAt: typeof lm?.lockedAt === "string" ? lm.lockedAt : new Date().toISOString(),
-      incomes: Array.isArray(lm?.incomes) ? lm.incomes : [],
-      recurringExpenses: normalizeRecurringExpenses(Array.isArray(lm?.recurringExpenses) ? lm.recurringExpenses : []),
+      incomes: normalizeIncomes(Array.isArray(lm?.incomes) ? lm.incomes : []),
+      recurringExpenses: normalizeRecurringExpenses(Array.isArray(lm?.recurringExpenses) ? lm.recurringExpenses : [])
+        .map((e) => ({ ...e, paidPeriods: [] })),
       budgetCategories: normalizeBudgetCategories({ budgetCategories: lm?.budgetCategories }),
-      goals: normalizeGoals(Array.isArray(lm?.goals) ? lm.goals : []),
+      goals: normalizeGoals(Array.isArray(lm?.goals) ? lm.goals : [])
+        .map((g) => ({ ...g, appliedPeriods: [], manualAdjustments: [] })),
     }))
     .filter((lm: LockedMonth) => lm.monthKey.length > 0);
 }
@@ -259,10 +279,7 @@ export function normalizeParsed(parsed: any): BudgetState {
     Array.isArray(parsed?.recurringExpenses) ? parsed.recurringExpenses : []
   );
 
-  const incomes: Income[] = (Array.isArray(parsed?.incomes) ? parsed.incomes : []).map((inc: any) => ({
-    ...inc,
-    payCycle: coercePayCycle(inc?.payCycle),
-  }));
+  const incomes = normalizeIncomes(Array.isArray(parsed?.incomes) ? parsed.incomes : []);
   const budgetCategories = normalizeBudgetCategories(parsed);
   const goals = normalizeGoals(Array.isArray(parsed?.goals) ? parsed.goals : []);
   const lockedMonths = normalizeLockedMonths(Array.isArray(parsed?.lockedMonths) ? parsed.lockedMonths : []);
@@ -273,6 +290,10 @@ export function normalizeParsed(parsed: any): BudgetState {
       onboardingComplete: !!parsed?.meta?.onboardingComplete,
       version: 1,
       createdAt: typeof parsed?.meta?.createdAt === "string" ? parsed.meta.createdAt : new Date().toISOString(),
+      hints: Array.isArray(parsed?.meta?.hints)
+        ? parsed.meta.hints.filter((h: unknown): h is string => typeof h === "string")
+        : [],
+      demo: parsed?.meta?.demo === true,
     },
     incomeMonthly: Math.max(0, Number(parsed?.incomeMonthly ?? 0) || 0),
     payCycle,

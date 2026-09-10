@@ -13,6 +13,7 @@ import { AddGoalForm, emptyGoalDraft, type DraftGoal } from "../components/AddGo
 import { jumpToAddForm } from "../lib/jumpToAddForm";
 import { toISODate } from "../lib/month";
 import { formatAdjustmentDate, sortAdjustmentsForDisplay } from "../lib/goalAdjustments";
+import { Hint, dismissHint, type HintId } from "../components/Hint";
 
 const RECENT_ADJ_COUNT = 3;
 
@@ -282,6 +283,10 @@ export default function GoalsPage() {
     return true;
   }
 
+  function dismiss(id: HintId) {
+    setState((s) => (s ? dismissHint(s, id) : s));
+  }
+
   function updateGoal(id: string, patch: Partial<Goal>) {
     setState((s) => s ? { ...s, goals: s.goals.map((g) => g.id === id ? { ...g, ...patch } : g) } : s);
     savedIndicator.flash();
@@ -390,9 +395,11 @@ export default function GoalsPage() {
         <p className="kicker">Goals</p>
         <h1 className="page-head__title">Goals &amp; Targets</h1>
         <p className="page-head__lead">
-          Track savings targets and debt payoff progress. Link a goal to multiple budget categories or recurring bills so the period widget can apply contributions each paycheck.
+          Track savings targets and debt payoff progress. Link a goal to budget categories or bills so the Overview can apply contributions each paycheck.
         </p>
       </header>
+
+      <Hint id="goals" hints={state.meta.hints} onDismiss={dismiss} />
 
       {/* Progress cards */}
       {goals.length > 0 && (

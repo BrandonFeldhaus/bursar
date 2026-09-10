@@ -928,8 +928,23 @@ select {
   gap: 18px;
 }
 
+/* Visually hidden but focusable, so the .btn label around it works from the keyboard */
 .fileInputHidden {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.btn:focus-within,
+.text-link-btn:focus-within {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
 }
 
 /* =========================================================
@@ -1535,16 +1550,6 @@ select {
 .ledger-table--goals th:nth-child(4) { width: 10%; }
 .ledger-table--goals th:nth-child(5) { width: 38%; }
 .ledger-table--goals th:nth-child(6) { width: 8%; }
-.ledger-table--onb-bills th:nth-child(1) { width: 32%; }
-.ledger-table--onb-bills th:nth-child(2) { width: 16%; }
-.ledger-table--onb-bills th:nth-child(3) { width: 22%; }
-.ledger-table--onb-bills th:nth-child(4) { width: 26%; }
-.ledger-table--onb-categories th:nth-child(1),
-.ledger-table--onb-goals th:nth-child(1) { width: 45%; }
-.ledger-table--onb-categories th:nth-child(2),
-.ledger-table--onb-categories th:nth-child(3),
-.ledger-table--onb-goals th:nth-child(2),
-.ledger-table--onb-goals th:nth-child(3) { width: 25%; }
 
 /* =========================================================
    RECENT LIST (new class names)
@@ -1598,7 +1603,6 @@ select {
 
 /* Paid / applied checkbox */
 .recent-item__check { cursor: pointer; }
-.recent-item__check--locked { cursor: default; opacity: 0.5; }
 .recent-item__check--nolink { cursor: not-allowed; opacity: 0.4; }
 
 /* =========================================================
@@ -1648,54 +1652,82 @@ select {
   min-width: 0;
 }
 
-.period-card__inline-stats {
+/* Tabs — Income / Bills / Leftover (+ Goals). The active tab carries an ink rule under it. */
+.period-card__tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin: 8px 0 12px;
+  gap: 6px;
+  margin: 8px 0 6px;
   min-width: 0;
 }
 
-.period-card__inline-stat {
-  min-width: 0;
-}
-
-.period-card__inline-stat .stat__label {
-  font-size: clamp(7px, 2.4vw, 9px);
-  letter-spacing: 0.12em;
-}
-
-.period-card__inline-stat .stat__value {
-  font-size: clamp(13px, 4vw, 19px);
-  margin-top: 2px;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-/* Clickable stat tab variant */
 .period-card__tab {
   all: unset;
-  display: block;
   box-sizing: border-box;
-  cursor: pointer;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: var(--ink-a04);
-  border: 2px solid transparent;
-  transition: background 100ms;
-  text-align: left;
+  display: grid;
+  gap: 2px;
   width: 100%;
   min-width: 0;
+  padding: 10px 12px 8px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-bottom: 3px solid transparent;
+  background: var(--ink-a04);
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms, border-color 100ms;
 }
 .period-card__tab:hover { background: var(--ink-a08); }
+.period-card__tab:active { background: var(--ink-a10); transform: translateY(1px); }
 .period-card__tab--active {
-  background: var(--ink-a10) !important;
-  border-color: var(--ink-1);
+  background: var(--ink-a10);
+  border-bottom-color: var(--ink-1);
 }
+.period-card__tab--active .stat__label { color: var(--ink-1); }
 .period-card__tab:focus-visible {
   outline: 2px solid var(--ink-1);
   outline-offset: 2px;
 }
+.period-card__tab .stat__label {
+  font-size: clamp(7px, 2.4vw, 9px);
+  letter-spacing: 0.12em;
+}
+.period-card__tab .stat__value {
+  font-size: clamp(13px, 4vw, 19px);
+  margin-top: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+/* Full-width fourth tab when goals exist */
+.period-card__tab--goals {
+  grid-column: 1 / -1;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  padding: 7px 12px 5px;
+}
+.period-card__goals-count {
+  font-family: var(--font-stamp);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+@media (width <= 600px) {
+  .period-card__tab--goals { min-height: 44px; }
+}
+
+/* The period that contains today */
+.period-card--current::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 20px; bottom: 20px;
+  width: 3px;
+  background: var(--ink-1);
+  border-radius: 0 2px 2px 0;
+  opacity: 0.65;
+}
+.stamp--current { color: var(--ink-1); }
 
 @media (width <= 420px) {
   .recent-item {
@@ -1871,92 +1903,6 @@ select {
 }
 
 /* =========================================================
-   ONBOARDING
-   ========================================================= */
-
-.onboarding-stage {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 32px 16px;
-}
-
-.onboarding-card {
-  width: min(100%, 720px);
-  padding: 32px 40px 36px 40px;
-  position: relative;
-}
-
-@media (width <= 600px) {
-  .onboarding-card { padding: 28px 24px 28px 24px; }
-}
-
-.onboarding-table {
-  min-width: 360px;
-}
-
-.onboarding-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 24px 0;
-  color: var(--ink-4);
-  font-family: var(--font-stamp);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.onboarding-divider::before,
-.onboarding-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--rule-blue);
-}
-
-.onboarding-file-btn {
-  cursor: pointer;
-  display: inline-flex;
-}
-
-.onboarding-step-meta {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  font-family: var(--font-stamp);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  margin-bottom: 4px;
-}
-
-.onboarding-step-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ink-a18);
-}
-
-.onboarding-step-dot--active { background: var(--ink-1); }
-.onboarding-step-dot--done  { background: var(--ink-a55); }
-
-.onboarding-step { display: inline-flex; align-items: center; gap: var(--space-1); }
-.onboarding-step__label { color: var(--ink-3); }
-.onboarding-step__label--active { color: var(--ink-1); }
-.onboarding-step__sep { color: var(--ink-4); margin: 0 6px; }
-
-/* Step copy spacing inside the card */
-.onboarding-title { margin-bottom: 10px; }
-.onboarding-lead { margin-bottom: var(--space-5); }
-.onboarding-lead--tight { margin-bottom: var(--space-2); }
-.onboarding-hint { margin-bottom: var(--space-5); }
-.onboarding-form { display: grid; gap: 18px; }
-.onboarding-add-row { width: 100%; justify-content: flex-end; margin-bottom: var(--space-2); }
-.onboarding-nav { margin-top: var(--space-6); }
-
-/* =========================================================
    BILLS CALENDAR
    ========================================================= */
 
@@ -2116,8 +2062,7 @@ select {
   opacity: 0.6;
 }
 
-/* Sheet that hosts the timeline, and the end-of-month figure under it */
-.timeline-card { padding: 20px 28px 24px; }
+/* End-of-month figure under the timeline */
 .timeline__balance {
   font-family: var(--font-numerals);
   font-size: 22px;
@@ -2529,41 +2474,7 @@ select {
   color: var(--ink-4);
   letter-spacing: 0.12em;
 }
-/* A locked goal checkbox is dimmed a touch more than a locked bill checkbox */
-.goal-period-item .recent-item__check--locked { opacity: 0.4; }
 
-/* 4-column variant for period card inline stats */
-.period-card__goals-tab {
-  all: unset;
-  box-sizing: border-box;
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 7px 12px;
-  border-radius: var(--radius-md);
-  background: var(--ink-a04);
-  border: 2px solid transparent;
-  cursor: pointer;
-  transition: background 100ms;
-}
-.period-card__goals-tab:hover { background: var(--ink-a08); }
-.period-card__goals-tab--active {
-  background: var(--ink-a10) !important;
-  border-color: var(--ink-1);
-}
-.period-card__goals-tab:focus-visible {
-  outline: 2px solid var(--ink-1);
-  outline-offset: 2px;
-}
-.period-card__goals-tab__count {
-  font-family: var(--font-stamp);
-  font-size: 9px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
 
 /* =========================================================
    INLINE FORM (below ledger table)
@@ -2617,6 +2528,22 @@ select {
   .period-card { padding: 16px 16px 18px 16px; }
 }
 
+/* Two columns at every width — add forms embedded in a period card's empty state */
+.inline-form--narrow,
+.inline-form--narrow.inline-form--4col,
+.inline-form--narrow.inline-form--5col {
+  grid-template-columns: 1fr 1fr;
+  padding: 14px 16px 16px;
+  border-radius: var(--radius-md);
+}
+.inline-form--narrow > :last-child { grid-column: 1 / -1; }
+
+@media (width <= 600px) {
+  .inline-form--narrow,
+  .inline-form--narrow.inline-form--4col,
+  .inline-form--narrow.inline-form--5col { grid-template-columns: 1fr; }
+}
+
 /* =========================================================
    ADD GOAL FORM — three stacked blocks on the sunk paper
    (fields grid, optional link checkboxes, full-width button)
@@ -2632,70 +2559,6 @@ select {
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 .add-goal__submit--sheet { background: transparent; padding: 14px 0 0; border-radius: 0; }
-
-/* =========================================================
-   EMPTY STATE (Overview)
-   ========================================================= */
-
-.empty-state {
-  padding: 24px 28px 28px;
-  display: grid;
-  gap: 16px;
-}
-
-@media (width <= 600px) {
-  .empty-state { padding: 20px 20px 24px; }
-}
-
-.empty-state__steps {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 14px;
-}
-
-.empty-state__steps li {
-  display: grid;
-  grid-template-columns: 32px 1fr;
-  align-items: start;
-  gap: 14px;
-}
-
-.empty-state__steps strong {
-  font-family: var(--font-hand);
-  font-weight: 700;
-  font-size: 17px;
-  color: var(--ink-1);
-  display: block;
-  line-height: 24px;
-}
-
-.empty-state__steps .muted {
-  margin-top: 2px;
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.empty-state__num {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--ink-1);
-  color: var(--paper-1);
-  font-family: var(--font-stamp);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.empty-state__actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
 
 /* =========================================================
    FORM ERRORS + SAVED INDICATOR
@@ -3174,48 +3037,10 @@ select {
 }
 
 /* =========================================================
-   MONTH CONTROLS (Overview) — mobile-friendly grouping
+   MONTH NAV LABEL (Expenses) — month label between ‹ › buttons
    ========================================================= */
 
-.month-controls {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.month-controls__group {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* Month heading beside the controls (Overview) */
-.month-title { display: flex; align-items: center; gap: 10px; }
-.month-title__label {
-  font-family: var(--font-display);
-  font-size: 32px;
-  line-height: 1.1;
-  color: var(--ink-1);
-}
-.month-note { margin-top: var(--space-2); font-style: italic; font-size: 13px; }
-
-/* Month label between ‹ › buttons (Expenses) */
 .month-nav__label { font-family: var(--font-display); font-size: 24px; color: var(--ink-1); }
-
-@media (width <= 600px) {
-  .month-controls {
-    width: 100%;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  .month-controls__group { flex: 1 1 auto; }
-  .month-controls .btn {
-    height: 32px;
-    padding: 0 12px;
-    font-size: 10px;
-  }
-}
 
 /* =========================================================
    PERIOD CARD — paid progress strip (always visible)
@@ -3292,4 +3117,408 @@ select {
 
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; opacity: 0.7; }
+}
+
+/* =========================================================
+   MONTH HEAD (Overview) — month title + Prev / Today / Next
+   ========================================================= */
+
+.month-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.month-head__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.month-head__label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(30px, 5vw, 40px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--ink-1);
+}
+
+.month-head__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.month-head__loading { width: 100%; font-style: italic; }
+
+@media (width <= 600px) {
+  .month-head__controls { width: 100%; }
+  .month-head__controls .btn {
+    flex: 1 1 0;
+    min-height: 44px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+}
+
+/* =========================================================
+   MONTH SUMMARY (Overview) — Income − Bills = Leftover on one rule
+   ========================================================= */
+
+.month-summary { padding: 12px 22px 10px; }
+
+.month-summary__line {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-4);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule-blue);
+}
+
+.month-summary__caption {
+  font-family: var(--font-stamp);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding-bottom: 4px;
+  white-space: nowrap;
+}
+
+.month-summary__equation {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.month-summary__term {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  min-width: 0;
+}
+
+.month-summary__label {
+  font-family: var(--font-stamp);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.month-summary__value {
+  font-family: var(--font-numerals);
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-size: clamp(15px, 2.4vw, 22px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--ink-1);
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 3px double transparent; /* keeps every term the same height as the ruled total */
+}
+
+.month-summary__op {
+  font-family: var(--font-numerals);
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--ink-3);
+  padding-bottom: 2px;
+}
+
+/* The leftover is the ledger's total: heavier ink under a double rule; red when negative */
+.month-summary__term--total .month-summary__label { color: var(--ink-1); }
+.month-summary__value--total {
+  font-weight: 600;
+  border-bottom-color: var(--ink-1);
+}
+.month-summary__value--neg {
+  color: var(--signal-red);
+  border-bottom-color: var(--signal-red);
+}
+
+@media (width <= 420px) {
+  .month-summary__line { display: grid; gap: var(--space-1); }
+  .month-summary__caption { padding-bottom: 0; }
+  .month-summary__equation { display: grid; gap: var(--space-1); }
+  .month-summary__op { display: none; }
+  .month-summary__term {
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    justify-items: start;
+  }
+  .month-summary__value { justify-self: end; }
+}
+
+/* =========================================================
+   PERIOD EMPTY STATE + QUICK ADD — first-run copy, and the
+   add-paycheck / add-bill row at the bottom of a tab
+   ========================================================= */
+
+.period-card__quick-add {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--border-soft);
+}
+.period-card__quick-add > .inline-form { justify-self: stretch; }
+
+.period-empty {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-2) 0 var(--space-1);
+}
+
+.period-empty__text {
+  margin: 0;
+  font-family: var(--font-hand);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--ink-2);
+  max-width: 44ch;
+}
+
+.period-empty__links {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Underlined text links; --btn is the same look on a <button> or file-input <label> */
+.text-link,
+.text-link-btn {
+  font-family: var(--font-hand);
+  font-size: 14px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-a40);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.text-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.text-link:hover,
+.text-link-btn:hover {
+  color: var(--ink-1);
+  text-decoration-color: var(--ink-1);
+}
+
+@media (width <= 600px) {
+  .text-link-btn { min-height: 44px; }
+}
+
+/* =========================================================
+   HINT LINE — one-sentence, dismiss-once hint
+   ========================================================= */
+
+.hint-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px 6px 6px 14px;
+  border-left: 3px solid var(--ink-1);
+  border-radius: var(--radius-md);
+  background: var(--ink-a04);
+}
+
+.hint-line__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-hand);
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--ink-2);
+}
+
+.hint-line__dismiss {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.hint-line__dismiss:hover { background: var(--ink-a08); color: var(--ink-1); }
+.hint-line__dismiss:focus-visible {
+  outline: 2px solid var(--ink-1);
+  outline-offset: 2px;
+}
+
+.period-card .hint-line { margin: 0 0 8px; }
+
+@media (width <= 600px) {
+  .hint-line__dismiss { width: 44px; height: 44px; }
+}
+
+/* =========================================================
+   DEMO BANNER — "You're looking at sample data." (inside the sticky header)
+   ========================================================= */
+
+.demo-banner {
+  margin-top: 10px;
+  background: var(--surface-sunk);
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.demo-banner__inner {
+  position: relative;
+  z-index: 1;
+  width: var(--sheet-width);
+  max-width: calc(100% - (var(--sheet-left) * 2));
+  margin-inline: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: 6px 0;
+}
+
+.demo-banner__text {
+  font-family: var(--font-hand);
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.demo-banner__btn {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+@media (width <= 600px) {
+  .demo-banner__inner { flex-wrap: nowrap; }
+  .demo-banner__text { font-size: 13px; line-height: 18px; min-width: 0; }
+  .demo-banner__btn { min-height: 44px; flex-shrink: 0; }
+}
+
+/* =========================================================
+   OVERFLOW MENU — ⋯ button with a small action list
+   ========================================================= */
+
+.overflow-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.overflow-menu__btn {
+  width: 36px;
+  padding: 0;
+}
+
+.overflow-menu__list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  min-width: 220px;
+  padding: 6px;
+  display: grid;
+  background: var(--paper-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-paper-lg);
+}
+
+.overflow-menu__item {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-hand);
+  font-size: 15px;
+  color: var(--ink-1);
+  cursor: pointer;
+}
+.overflow-menu__item:hover { background: var(--ink-a06); }
+.overflow-menu__item:focus-visible {
+  outline: 2px solid var(--ink-1);
+  outline-offset: -2px;
+}
+
+@media (width <= 600px) {
+  .month-head__controls .overflow-menu__btn { flex: 0 0 44px; width: 44px; }
+  .overflow-menu__item { min-height: 44px; display: flex; align-items: center; }
+}
+
+/* =========================================================
+   TIMELINE DETAILS — collapsible cash-flow sheet under the period grid
+   ========================================================= */
+
+.timeline-details { padding: 0; }
+
+.timeline-details__summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 18px 28px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.timeline-details__summary::-webkit-details-marker { display: none; }
+.timeline-details__summary:focus-visible {
+  outline: 2px solid var(--ink-1);
+  outline-offset: -4px;
+  border-radius: var(--radius-lg);
+}
+
+.timeline-details__heading {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.timeline-details__title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-1);
+}
+
+.timeline-details__chevron {
+  flex-shrink: 0;
+  color: var(--ink-3);
+  transition: transform 150ms;
+}
+.timeline-details[open] .timeline-details__chevron { transform: rotate(180deg); }
+.timeline-details__summary:hover .timeline-details__chevron { color: var(--ink-1); }
+
+.timeline-details__body { padding: 0 28px 24px; }
+
+@media (width <= 600px) {
+  .timeline-details__summary { padding: 14px 20px; min-height: 44px; }
+  .timeline-details__body { padding: 0 20px 20px; }
 }

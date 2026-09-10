@@ -51,8 +51,6 @@ export function BottomNav() {
   const pathname = usePathname();
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname?.startsWith(href));
 
-  if (pathname === "/onboarding") return null;
-
   return (
     <nav className="bottomNav" aria-label="Primary">
       <ul className="bottomNavList">

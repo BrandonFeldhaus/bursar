@@ -13,6 +13,7 @@ import { AddCategoryForm, emptyCategoryDraft, type CategoryFormDraft } from "../
 import { BottomSheet } from "../components/BottomSheet";
 import { jumpToAddForm } from "../lib/jumpToAddForm";
 import { useIsMobile } from "../lib/useIsMobile";
+import { Hint, dismissHint, type HintId } from "../components/Hint";
 
 function AllocationRing({
   segments,
@@ -95,6 +96,10 @@ export default function BudgetPage() {
     if (!hydrated || !state) return;
     saveState(state);
   }, [hydrated, state]);
+
+  function dismiss(id: HintId) {
+    setState((s) => (s ? dismissHint(s, id) : s));
+  }
 
   function update(id: string, patch: Partial<BudgetCategory>) {
     setState((s) => s ? { ...s, budgetCategories: s.budgetCategories.map((c) => (c.id === id ? { ...c, ...patch } : c)) } : s);
@@ -193,6 +198,8 @@ export default function BudgetPage() {
         <h1 className="page-head__title">Allocation plan</h1>
         <p className="page-head__lead">Decide how each paycheck's leftover gets divided. Fixed amounts are reserved first; percentages split whatever remains.</p>
       </header>
+
+      <Hint id="budget" hints={state.meta.hints} onDismiss={dismiss} />
 
       {/* Stats row */}
       <div className="stat-row">
