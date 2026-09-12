@@ -5,6 +5,13 @@ All notable changes to Bursar will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-12
+
+### Added
+
+- Monthly pay cycle for income sources: paid once a month on the same day as your most recent paycheck, clamped to shorter months (an anchor on the 31st pays on the 28th/30th where needed). Pick it in the Pay cycle field on the Income page or in any "Add income" dialog.
+- "Monthly sources" count on the Income page stats row.
+
 ## [1.1.0] - 2026-09-12
 
 A UX pass over every page: no setup wizard, goals you can actually fund, one way to add things on desktop and mobile, and legible type. Stored data is unchanged and every earlier export still imports.
