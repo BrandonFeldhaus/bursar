@@ -68,13 +68,14 @@ Bill and goal rows wrap the checkbox and name in a `<label class="recent-item__t
 | `eraseAllData.ts` | `eraseAllData()` — clear every stored key and go to `/` |
 | `paychecks.ts` | `upcomingPaychecks` — forecasts future paycheck dates |
 | `goalFunding.ts` | How goals are funded (see *Goal funding*): `sourceAmount`, `goalFundingTotal`, `fundingCandidates`, `goalFundingSources`, `paychecksToGo`, `currentPeriod` |
-| `useModal.ts` | `useModal(open, onClose, panelRef)` — shared modal behaviour: body scroll lock, Escape closes the topmost modal only, first field focused on open, focus returned to the opener on close |
+| `useModal.ts` | `useModal(open, onClose, panelRef)` — shared modal behaviour: body scroll lock plus a `touchmove` guard (a drag on the overlay that isn't scrolling something inside it is cancelled — iOS ignores `overflow: hidden`), Escape closes the topmost modal only, first field focused on open (on `pointer: coarse` the panel itself, `tabIndex={-1}`, so the keyboard doesn't open over an unseen form), focus returned to the opener on close |
+| `useSheetKeyboard.ts` | `useSheetKeyboard(open, panelRef)` — keeps a `BottomSheet` above the on-screen keyboard (see *Keyboard*); `nextSheetKeyboard` is the pure rule, `opensKeyboard(el)` the shared field test |
 
 ### Goal funding (`lib/goalFunding.ts`)
 A goal is funded by budget categories and bills (`linkedBudgetCategoryIds` / `linkedExpenseIds` — unchanged schema). Ticking the goal on a period card applies the sum of those sources for that period: a category contributes its allocation (`computeAllocations(period.leftover, categories)`), a bill contributes its amount only in the period it is due, and an id that no longer exists contributes 0. `sourceAmount` is the one place that is computed; `goalFundingTotal` sums a goal's links (Overview), `fundingCandidates` lists every category and bill with its amount (the picker), `goalFundingSources` filters that to the goal's links in order (chips, badges), `paychecksToGo(remaining, perPaycheck)` is `ceil` or `null`, and `currentPeriod(state, today)` finds the period containing today (falling back to last month's overhanging last period). The goals page computes candidates once from `currentPeriod(state)` and passes them down.
 
 ### Add-form pattern (FormDialog)
-Every "add a row" flow uses one shared form component rendered inside `FormDialog` (`components/FormDialog.tsx`): a centered `.dialog.dialog--form` on desktop, `BottomSheet` on mobile (`useIsMobile()` at 600px). Both containers use `useModal`: Escape and overlay click close them, the first field is focused on open, and focus returns to the `+ Add X` button on close. Nothing scrolls the page. The `+ Add X` header buttons (`.btn.btn--add`) are visible at every width. Add handlers return `boolean` so the dialog closes only on a successful add — validation failures keep it open. Each form file also exports a `xFromDraft(draft, errs)` builder so pages and the Overview share one add path. Forms take `inSheet` (adds `.inline-form--sheet`: no sunk chrome, two columns, one at ≤600px).
+Every "add a row" flow uses one shared form component rendered inside `FormDialog` (`components/FormDialog.tsx`): a centered `.dialog.dialog--form` on desktop, `BottomSheet` on mobile (`useIsMobile()` at 600px). Both containers use `useModal`: Escape and overlay click close them, the first field is focused on open (the panel on touch screens), and focus returns to the `+ Add X` button on close. Nothing scrolls the page. The `+ Add X` header buttons (`.btn.btn--add`) are visible at every width. Add handlers return `boolean` so the dialog closes only on a successful add — validation failures keep it open. Each form file also exports a `xFromDraft(draft, errs)` builder so pages and the Overview share one add path. Forms take `inSheet` (adds `.inline-form--sheet`: no sunk chrome, two columns, one at ≤600px).
 
 | Component (`app/components/`) | Used by |
 |---|---|
@@ -91,6 +92,9 @@ Other shared pieces: `ImportLedgerButton` (label + hidden file input; unwraps `{
 Inline expanded `<tr>` on desktop, `BottomSheet` on mobile; two stacked sections split by `.goal-editor__divider`:
 - **Funded by** — explainer line, the goal's sources as removable `.funding-chip`s (name + amount for the current period), a `.funding-total` line ("≈ $X per paycheck", plus "about N paychecks to go" while something remains; hidden when the total is 0), and `FundingPicker`. The picker button ("Add funding source") opens the candidates grouped under *Budget categories* and *Bills* as two `<details>`; the goal's type decides which group is open first (debt → Bills, savings → categories). Desktop renders it through a portal as a `position: fixed` `.funding-picker__popover` placed with `--top` / `--left` from the button's rect (re-placed on scroll/resize, closed on outside click / Escape / *Done*); mobile uses `BottomSheet` with 44px rows. Sources already on the goal are checked and disabled. Nothing linkable → a note instead of the button.
 - **Adjustments** — unchanged: the dated list (recent three, *Show all*), and the +/− amount + note form (`.inline-form--bare`, button "Add adjustment").
+
+### Keyboard (`lib/useSheetKeyboard.ts`)
+Mobile browsers don't shrink the layout for the keyboard, so a fixed bottom sheet ends up under it. `BottomSheet` calls `useSheetKeyboard`, which watches `visualViewport` and, once the keyboard covers ≥ 80px, adds `.bottom-sheet--keyboard`: the sheet pins full height `--sheet-top` + 12px from the top and keeps `--sheet-inset` clear at the bottom, and the focused `.field` is scrolled into view inside `.bottom-sheet__body`. It stays pinned until the sheet closes, and while a field (input / select / textarea) keeps focus the inset only grows, so the form doesn't move when the keyboard hides for a select or date picker, or shrinks to a number pad. With nothing focused the inset follows the viewport. A new layout height (rotation) or pinch zoom (`scale > 1`, ignored) never leaves it stuck. Nothing autofocuses a field on touch screens (see `useModal`).
 
 ### Pay cycles
 `PayCycle = "biweekly" | "semimonthly" | "weekly" | "monthly"`
@@ -145,6 +149,7 @@ tests/
   month-view.test.ts         # viewStateForMonth, snapshotForMonth, upsertSnapshot, backfillSnapshots,
                              # saveState upserting the current month (window/localStorage stubbed), legacy snapshots
   sample-data.test.ts        # meta.hints / meta.demo defaults, sampleData() round-trips through normalizeParsed
+  sheet-keyboard.test.ts     # nextSheetKeyboard: expand threshold, pan, inset held while a field is focused, rotation reset
   helpers.ts                 # semiIncome(), biwIncome(), monthlyExpense(), annualExpense(), etc.
   fixtures/                  # scenario JSON files (A–I) for import testing
 ```
@@ -174,6 +179,7 @@ The design uses a "ruled ledger paper" aesthetic.
 | `--pos` | timeline tick / label / today marker | `.timeline__tick`, `.timeline__lbl`, `.timeline__today` (`left: var(--pos)`) |
 | `--swatch` | allocation ring segment, swatch, bar | `.ring__segment` (`stroke`), `.allocation-swatch`, `.allocation-bar__fill--swatch` (`background`) |
 | `--top` / `--left` | `FundingPicker` (button rect) | `.funding-picker__popover` (`top` / `left`) |
+| `--sheet-top` / `--sheet-inset` | `useSheetKeyboard` (`style.setProperty` on the panel, not a TSX `style`) | `.bottom-sheet--keyboard` (`inset` top / `padding-bottom`) |
 
 Write them as `style={{ "--pct": `${pct}%` } as CSSProperties}` (the cast is needed because `React.CSSProperties` has no index signature). Computed *colours* pick a modifier class (`--done`, `--debt`, `--neg`) rather than an inline value; the allocation ring is the one place a colour is passed through, via `--chart-1…7` tokens. Everything else — paddings, flex rows, font sizes, column widths — is a class. New classes follow the existing BEM-ish `.block__element--modifier` naming and go under the `/* ===== SECTION ===== */` comment of the component they belong to.
 
@@ -241,7 +247,7 @@ Never write a raw `rgba()`/hex in a component rule; add a token if one is missin
 | `.ring-card`, `.ring(__svg/__segment/__center/__label/__sublabel)`, `.allocation-swatch` | Budget allocation donut |
 | `.calendar-card` | Sheet hosting the bills calendar / agenda |
 | `.segment` / `.segment__btn` | Pill toggle group |
-| `.bottom-sheet` | Mobile slide-up drawer (`components/BottomSheet.tsx`); pairs with `.dialog-overlay--sheet`; `FormDialog`, the goal editor, the funding picker and the nav's More use it via `useIsMobile()` at 600px |
+| `.bottom-sheet` | Mobile slide-up drawer (`components/BottomSheet.tsx`); pairs with `.dialog-overlay--sheet`; `FormDialog`, the goal editor, the funding picker and the nav's More use it via `useIsMobile()` at 600px. `--keyboard` (added by `useSheetKeyboard`) pins it above the on-screen keyboard |
 | `.badge--xs/--sm/--faint`, `.stamp--sm` | Padding / opacity variants (all badges are 13px) |
 | `.btn--ghost` / `.btn--icon` / `.btn--danger` / `.btn--block` / `.btn--lg` / `.btn--add` | Button variants; `--add` is the compact `+ Add X` header button that opens `FormDialog` |
 | `.muted--italic` | Italic muted note |
@@ -257,6 +263,7 @@ Never write a raw `rgba()`/hex in a component rule; add a token if one is missin
 - **`useHydrated`** — all pages gate rendering behind this hook to avoid SSR/localStorage mismatch. Loading states must render the same markup server-side; that skeleton *is* the server HTML — keep it cheap and static. `DemoBanner` and the Settings hint render nothing on the server and appear after hydration.
 - **Touch targets** — at ≤600px every `.btn` (except icons, which become 44×44), form control inside `.inline-form`, segment button, period row, picker row and chip is at least 44px tall.
 - **Copy** — plain words, sentence case: "Bills" not "Bill notations", "Name" not "Notation", "Repeats" not "Cadence", "Funded by" not "Linked to", "Add income" for a source. `.kicker` eyebrows stay only where they encode something (a period's ordinal, a goal's type, the timeline section, the calendar's month); page and section headings have none.
+- **Mobile keyboard** — never autofocus a text field in a sheet on touch screens, and don't size a sheet with `vh` to dodge the keyboard; `useSheetKeyboard` owns that. The `touchmove` guard in `useModal` needs its listener on the overlay with `passive: false` (React's `onTouchMove` is passive).
 - **Modals stack** — `useModal` closes only the topmost `[aria-modal]` on Escape and restores the previous body overflow, so the funding picker's sheet can open over the goal editor's sheet.
 - **No inline styles** — see CSS conventions. `grep -rn 'style=' app` should only return `--pct`, `--pos`, `--swatch` custom properties.
 - **`out/` directory** is the static export committed to the repo. Run `npm run build` to regenerate it before committing changes.

@@ -5,6 +5,14 @@ All notable changes to Bursar will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-09-12
+
+### Fixed
+
+- **Add forms on mobile no longer disappear behind the keyboard.** Opening a form shows the whole thing without focusing a field, so the keyboard stays down until you tap the field you want. Desktop still focuses the first field.
+- **The page behind a sheet no longer scrolls.** Once the keyboard is up, the sheet sits above it and scrolls on its own. The field you tapped is scrolled into view.
+- **Forms no longer jump when you move between fields.** Once the keyboard has opened, the sheet keeps its place until it closes. Tapping a select or date field, the Savings/Debt toggle, or a field with a number keypad no longer shifts the form. This applies to every bottom sheet: the add forms, the goal editor and the funding picker.
+
 ## [1.2.0] - 2026-09-12
 
 ### Added

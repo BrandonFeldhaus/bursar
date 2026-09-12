@@ -3110,6 +3110,25 @@ select {
 .bottom-sheet__body {
   padding: 14px 18px calc(18px + env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The panel takes focus on touch screens instead of a field (useModal) */
+.bottom-sheet:focus { outline: none; }
+
+/* Keyboard up (useSheetKeyboard): the sheet pins to the visible part of the screen at full
+   height and stays pinned until it closes, so its fields hold still while the keyboard hides
+   for a picker and comes back. --sheet-top is how far the browser panned the view,
+   --sheet-inset the height the keyboard covers; the body scrolls in between. */
+.bottom-sheet--keyboard {
+  position: absolute;
+  inset: calc(var(--sheet-top) + var(--space-3)) 0 0;
+  max-height: none;
+  padding-bottom: max(var(--sheet-inset), env(safe-area-inset-bottom, 0px));
+}
+.bottom-sheet--keyboard .bottom-sheet__body {
+  flex: 1 1 auto;
+  padding-bottom: 18px;
 }
 
 /* Add forms inside FormDialog / BottomSheet lose their sunk-paper chrome and run two
@@ -3141,6 +3160,8 @@ select {
   overflow: hidden;
 }
 
+.dialog--form:focus { outline: none; }
+
 .dialog__head {
   display: flex;
   align-items: center;
@@ -3163,6 +3184,7 @@ select {
 .dialog--form .dialog__body {
   padding: 14px 18px 18px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* =========================================================
