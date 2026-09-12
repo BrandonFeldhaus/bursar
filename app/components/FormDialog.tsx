@@ -9,7 +9,7 @@ import { useModal } from "../lib/useModal";
 /**
  * The container every "+ Add X" button opens: a centered dialog on desktop, the
  * BottomSheet on mobile. Both close on Escape and overlay click, focus the first
- * field on open, and return focus to the button that opened them.
+ * field on open (the panel on touch screens), and return focus to the button that opened them.
  */
 export function FormDialog({
   open,
@@ -63,7 +63,7 @@ function CenteredDialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="dialog dialog--form" ref={panelRef}>
+      <div className="dialog dialog--form" ref={panelRef} tabIndex={-1}>
         <div className="dialog__head">
           <h3 className="dialog__title">{title}</h3>
           <button className="btn btn--icon" type="button" onClick={onClose} aria-label="Close">
