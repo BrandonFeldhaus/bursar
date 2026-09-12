@@ -3,7 +3,7 @@ import { nextSheetKeyboard, SHEET_KEYBOARD_CLOSED, type SheetKeyboard } from "..
 
 // An iPhone-sized layout viewport; the keyboard shrinks the visual viewport, never the layout.
 const LAYOUT = 750;
-const view = (height: number, offsetTop = 0, layoutHeight = LAYOUT) => ({ layoutHeight, height, offsetTop });
+const view = (height: number, layoutHeight = LAYOUT) => ({ layoutHeight, height });
 
 function run(steps: [ReturnType<typeof view>, boolean][]): SheetKeyboard {
   return steps.reduce((state, [v, focused]) => nextSheetKeyboard(state, v, focused), SHEET_KEYBOARD_CLOSED);
@@ -11,7 +11,7 @@ function run(steps: [ReturnType<typeof view>, boolean][]): SheetKeyboard {
 
 describe("nextSheetKeyboard", () => {
   it("stays collapsed while the visual viewport fills the layout", () => {
-    expect(run([[view(LAYOUT), false]])).to.deep.equal({ expanded: false, top: 0, inset: 0, layoutHeight: LAYOUT });
+    expect(run([[view(LAYOUT), false]])).to.deep.equal({ expanded: false, inset: 0, reserve: 0, layoutHeight: LAYOUT });
   });
 
   it("ignores a small shrink (browser chrome, not a keyboard)", () => {
@@ -19,35 +19,36 @@ describe("nextSheetKeyboard", () => {
   });
 
   it("expands and clears the keyboard when it opens", () => {
-    expect(run([[view(360), true]])).to.deep.equal({ expanded: true, top: 0, inset: 390, layoutHeight: LAYOUT });
+    expect(run([[view(359.6), true]])).to.deep.equal({ expanded: true, inset: 390, reserve: 0, layoutHeight: LAYOUT });
   });
 
-  it("follows a panned view: top moves down, the inset excludes the pan", () => {
-    const s = run([[view(360, 120.4), true]]);
-    expect(s.top).to.equal(120);
-    expect(s.inset).to.equal(270);
-  });
-
-  it("holds the inset when the keyboard hides for a select or date picker", () => {
+  it("keeps the visible area on the real keyboard when it hides for a picker, holding the difference as scroll room", () => {
     const s = run([[view(360), true], [view(LAYOUT), true]]);
-    expect(s).to.deep.equal({ expanded: true, top: 0, inset: 390, layoutHeight: LAYOUT });
+    expect(s).to.deep.equal({ expanded: true, inset: 0, reserve: 390, layoutHeight: LAYOUT });
   });
 
-  it("holds the larger inset when a number pad replaces the text keyboard", () => {
-    expect(run([[view(360), true], [view(405), true]]).inset).to.equal(390);
+  it("holds scroll room when a number pad replaces the text keyboard", () => {
+    const s = run([[view(360), true], [view(405), true]]);
+    expect([s.inset, s.reserve]).to.deep.equal([345, 45]);
   });
 
-  it("stays expanded but releases the inset once no field has focus", () => {
+  it("uses up the held room when the keyboard comes back", () => {
+    const s = run([[view(360), true], [view(LAYOUT), true], [view(360), true]]);
+    expect([s.inset, s.reserve]).to.deep.equal([390, 0]);
+  });
+
+  it("stays expanded but drops the scroll room once no field has focus", () => {
     const s = run([[view(360), true], [view(LAYOUT), false]]);
-    expect(s).to.deep.equal({ expanded: true, top: 0, inset: 0, layoutHeight: LAYOUT });
+    expect(s).to.deep.equal({ expanded: true, inset: 0, reserve: 0, layoutHeight: LAYOUT });
   });
 
-  it("takes the new inset when the keyboard comes back after a release", () => {
-    expect(run([[view(360), true], [view(LAYOUT), false], [view(405), true]]).inset).to.equal(345);
+  it("takes the new keyboard as-is after the room was dropped", () => {
+    const s = run([[view(360), true], [view(LAYOUT), false], [view(405), true]]);
+    expect([s.inset, s.reserve]).to.deep.equal([345, 0]);
   });
 
   it("starts over when the layout itself changes (rotation)", () => {
-    const s = run([[view(360), true], [view(390, 0, 390), true]]);
-    expect(s).to.deep.equal({ expanded: false, top: 0, inset: 0, layoutHeight: 390 });
+    const s = run([[view(360), true], [view(390, 390), true]]);
+    expect(s).to.deep.equal({ expanded: false, inset: 0, reserve: 0, layoutHeight: 390 });
   });
 });

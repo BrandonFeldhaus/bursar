@@ -18,6 +18,7 @@ export function useModal(open: boolean, onClose: () => void, panelRef: RefObject
     if (!open) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
+    const previousScrollY = window.scrollY;
     document.body.style.overflow = "hidden";
 
     // An explicit [data-autofocus] wins. With a mouse or keyboard the first field comes next, then the
@@ -65,6 +66,8 @@ export function useModal(open: boolean, onClose: () => void, panelRef: RefObject
       overlay?.removeEventListener("touchstart", onTouchStart);
       overlay?.removeEventListener("touchmove", onTouchMove);
       document.body.style.overflow = previousOverflow;
+      // iOS scrolls the page behind to "reveal" a focused field even though it can't be seen; put it back.
+      if (window.scrollY !== previousScrollY) window.scrollTo(window.scrollX, previousScrollY);
       opener?.focus({ preventScroll: true });
     };
   }, [open, panelRef]);

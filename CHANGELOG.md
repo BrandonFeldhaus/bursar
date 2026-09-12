@@ -5,6 +5,14 @@ All notable changes to Bursar will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-09-12
+
+### Fixed
+
+- **Only the tapped field showed above the keyboard on iPhone.** Tapping a field in an add form (for example Name in "Add bill") pushed the rest of the form behind the keyboard. The form now stays near the top of the screen, and every field scrolls above the keyboard.
+- **Lower fields no longer vanish when you tap a select or date field.** After typing, choosing a select or date field left a blank gap where the keyboard had been, hiding the fields and button below. They now stay visible and don't move.
+- **The page behind a form keeps its place.** Closing a form returns the page to where you left it, even if the phone scrolled it while you were typing.
+
 ## [1.2.1] - 2026-09-12
 
 ### Fixed
