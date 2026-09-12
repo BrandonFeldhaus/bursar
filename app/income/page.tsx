@@ -98,6 +98,7 @@ export default function IncomePage() {
   const weeklyCount = state.incomes.filter((i) => i.payCycle === "weekly").length;
   const biweeklyCount = state.incomes.filter((i) => i.payCycle === "biweekly").length;
   const semiCount = state.incomes.filter((i) => i.payCycle === "semimonthly").length;
+  const monthlyCount = state.incomes.filter((i) => i.payCycle === "monthly").length;
 
   return (
     <section className="container">
@@ -120,6 +121,10 @@ export default function IncomePage() {
               <dt>Semi-monthly</dt>
               <dd>24 paychecks/year, always on the 1st and 15th. No anchor needed.</dd>
             </div>
+            <div>
+              <dt>Monthly</dt>
+              <dd>12 paychecks/year, on the same day of the month as your most recent paycheck.</dd>
+            </div>
           </dl>
         </details>
       </header>
@@ -127,7 +132,7 @@ export default function IncomePage() {
       <Hint id="income" hints={state.meta.hints} onDismiss={dismiss} />
 
       {/* Stats row */}
-      <div className="stat-row stat-row--4">
+      <div className="stat-row stat-row--5">
         <article className="sheet stat sheet--stat">
           <div className="stat__label">Monthly income</div>
           <div className="stat__value">{moneyFmt(monthly)}</div>
@@ -143,6 +148,10 @@ export default function IncomePage() {
         <article className="sheet stat sheet--stat">
           <div className="stat__label">Semi-monthly sources</div>
           <div className="stat__value">{semiCount}</div>
+        </article>
+        <article className="sheet stat sheet--stat">
+          <div className="stat__label">Monthly sources</div>
+          <div className="stat__value">{monthlyCount}</div>
         </article>
       </div>
 

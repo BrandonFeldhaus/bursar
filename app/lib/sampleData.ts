@@ -1,5 +1,5 @@
 import { defaultBudget, type BudgetState } from "./budgetStorage";
-import { toISODate } from "./month";
+import { paychecksPerYear, toISODate } from "./month";
 
 /**
  * The bundled sample ledger behind "Try it with sample data" on the Overview.
@@ -11,7 +11,7 @@ export function sampleData(now: Date = new Date()): BudgetState {
   return defaultBudget({
     settings: { payCycleType: "biweekly", paycheckAmount: 1800 },
     meta: { onboardingComplete: true, version: 1, createdAt: now.toISOString(), hints: [], demo: true },
-    incomeMonthly: (1800 * 26) / 12,
+    incomeMonthly: (1800 * paychecksPerYear("biweekly")) / 12,
     payCycle: "biweekly",
     lastPaycheckDate: anchor,
     paycheckAmount: 1800,

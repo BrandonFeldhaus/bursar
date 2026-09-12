@@ -4,12 +4,14 @@ import type { Dispatch, SetStateAction } from "react";
 import { newId, type Income, type PayCycle } from "../lib/storage";
 import { todayISO } from "../lib/month";
 
-export const needsAnchor = (cycle: PayCycle) => cycle === "biweekly" || cycle === "weekly";
+// Semi-monthly is fixed to the 1st & 15th; every other cycle is anchored to a real paycheck date.
+export const needsAnchor = (cycle: PayCycle) => cycle !== "semimonthly";
 
 export const CYCLE_OPTIONS: { value: PayCycle; label: string }[] = [
   { value: "weekly", label: "Weekly" },
   { value: "biweekly", label: "Bi-weekly" },
   { value: "semimonthly", label: "Semi-monthly" },
+  { value: "monthly", label: "Monthly" },
 ];
 
 export type SourceDraft = {

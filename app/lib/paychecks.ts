@@ -69,6 +69,17 @@ export function upcomingPaychecks(
   const last = parseISO(lastPaycheckISO);
   if (!last) return { dates: [], error: "Enter your last paycheck date to forecast paydays." };
 
+  if (payCycle === "monthly") {
+    // Same day-of-month each month, clamped to shorter months.
+    const dates: string[] = [];
+    for (let i = 1; i <= count; i++) {
+      const y = last.getFullYear();
+      const m = last.getMonth() + i;
+      dates.push(toISO(new Date(y, m, Math.min(last.getDate(), lastDayOfMonth(y, m)))));
+    }
+    return { dates };
+  }
+
   const lastDay = startOfDay(last);
   const intervalDays = payCycle === "weekly" ? 7 : 14;
 

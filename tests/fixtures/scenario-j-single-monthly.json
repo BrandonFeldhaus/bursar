@@ -1,0 +1,99 @@
+{
+  "app": "Bursar",
+  "format": "bursar:v1",
+  "exportedAt": "2026-05-04T12:00:00.000Z",
+  "data": {
+    "meta": {
+      "onboardingComplete": true,
+      "version": 1,
+      "createdAt": "2026-05-04T12:00:00.000Z"
+    },
+    "settings": {
+      "payCycleType": "monthly",
+      "paycheckAmount": 4000
+    },
+    "payCycle": "monthly",
+    "paycheckAmount": 4000,
+    "lastPaycheckDate": "2026-05-15",
+    "incomeMonthly": 4000,
+    "incomes": [
+      {
+        "id": "income-j1",
+        "name": "Monthly Salary",
+        "amount": 4000,
+        "cadence": "monthly",
+        "payCycle": "monthly",
+        "lastPaycheckDate": "2026-05-15"
+      }
+    ],
+    "recurringExpenses": [
+      {
+        "id": "exp-j-rent",
+        "name": "Rent",
+        "amount": 1300,
+        "cadence": "monthly",
+        "dueDay": 1,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-j-internet",
+        "name": "Internet",
+        "amount": 70,
+        "cadence": "monthly",
+        "dueDay": 10,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-j-phone",
+        "name": "Phone",
+        "amount": 55,
+        "cadence": "monthly",
+        "dueDay": 20,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-j-utilities",
+        "name": "Utilities",
+        "amount": 120,
+        "cadence": "monthly",
+        "dueDay": 28,
+        "paidPeriods": []
+      },
+      {
+        "id": "exp-j-car-ins",
+        "name": "Car Insurance",
+        "amount": 1440,
+        "cadence": "annual",
+        "dueDay": 8,
+        "dueMonth": 6,
+        "paidPeriods": []
+      }
+    ],
+    "budgetCategories": [
+      {
+        "id": "cat-j-savings",
+        "name": "Savings",
+        "mode": "percent",
+        "value": 15
+      },
+      {
+        "id": "cat-j-groceries",
+        "name": "Groceries",
+        "mode": "fixed",
+        "value": 500
+      },
+      {
+        "id": "cat-j-fun",
+        "name": "Fun money",
+        "mode": "percent",
+        "value": 10
+      },
+      {
+        "id": "cat-j-buffer",
+        "name": "Buffer",
+        "mode": "percent",
+        "value": 75
+      }
+    ]
+  }
+}

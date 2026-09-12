@@ -93,13 +93,14 @@ Inline expanded `<tr>` on desktop, `BottomSheet` on mobile; two stacked sections
 - **Adjustments** — unchanged: the dated list (recent three, *Show all*), and the +/− amount + note form (`.inline-form--bare`, button "Add adjustment").
 
 ### Pay cycles
-`PayCycle = "biweekly" | "semimonthly" | "weekly"`
+`PayCycle = "biweekly" | "semimonthly" | "weekly" | "monthly"`
 
-- **weekly** — 7-day intervals anchored to `lastPaycheckDate`; 52 paychecks/year (factor `52/12`)
-- **biweekly** — 14-day intervals anchored to `lastPaycheckDate`; 26 paychecks/year (factor `26/12`)
-- **semimonthly** — always 1st and 15th; no anchor needed; 24 paychecks/year (factor `24/12`)
+- **weekly** — 7-day intervals anchored to `lastPaycheckDate`; 52 paychecks/year
+- **biweekly** — 14-day intervals anchored to `lastPaycheckDate`; 26 paychecks/year
+- **semimonthly** — always 1st and 15th; no anchor needed; 24 paychecks/year
+- **monthly** — once a month on the day-of-month of `lastPaycheckDate`, clamped to shorter months (Jan 31 → Feb 28); 12 paychecks/year
 
-Weekly + biweekly share the `lastPaycheckDate` field; the income page uses a `needsAnchor(cycle)` helper to gate the date input and validation. Unknown payCycle values from imported JSON fall back to biweekly via `coercePayCycle` in `normalizeParsed`.
+Weekly, biweekly and monthly all share the `lastPaycheckDate` field; `needsAnchor(cycle)` in `AddSourceForm.tsx` (true for everything except semimonthly) gates the date input and its validation for both the add form and the income table's edit row. `paychecksPerYear(cycle)` in `month.ts` is the single source for the per-year factor — `monthlyIncomeOf` and `sampleData` both use it. Unknown payCycle values from imported JSON fall back to biweekly via `coercePayCycle` in `normalizeParsed`.
 
 ### Facts vs definitions, snapshots, and `viewStateForMonth` (critical)
 Two kinds of data live in `BudgetState`:
@@ -137,6 +138,7 @@ Export wraps the state in `{ app: "Bursar", format: "bursar:v1", exportedAt, dat
 tests/
   paycheck-periods.test.ts   # incomeDatesForMonth, monthlyIncomeOf, paycheckPeriodsForMonth
   budget-allocations.test.ts # computeAllocations, isBudgetOverdrawn
+  budget-storage.test.ts     # normalizeParsed payCycle coercion
   goal-adjustments.test.ts   # sortAdjustmentsForDisplay, formatAdjustmentDate, goal normalisation
   goal-funding.test.ts       # sourceAmount / goalFundingTotal (category, bill, mix, missing id → 0),
                              # fundingCandidates, goalFundingSources, paychecksToGo, currentPeriod
@@ -154,8 +156,10 @@ Scenarios in `paycheck-periods.test.ts` all test against May 2026 (31-day month)
 - **D** — two bi-weekly, offset anchors
 - **E** — single weekly income (May 1 anchor → 5 paychecks)
 - **F** — weekly + bi-weekly mixed (verifies 2-day merge rule with high paycheck density)
+- **G** — single monthly income (May 15 anchor → 1 period, overhang through Jun 14, pre-payday bills roll to April)
+- **H** — monthly (May 1) + bi-weekly (May 2) (day-1/day-2 merge → 3 periods, no overhang)
 
-Note: `tests/fixtures/scenario-{e,f,g}*.json` already exist for unrelated full-state import scenarios; new paycheck-pattern fixtures should pick letters from H onward to avoid collision. When adding a new pay cycle or period behaviour, add an inline scenario in the test file (preferred) and optionally a matching fixture.
+Note: `tests/fixtures/scenario-{e,f,g}*.json` already exist for unrelated full-state import scenarios; paycheck-pattern fixtures use H (weekly), I (weekly + bi-weekly), J (monthly) — new ones should continue from K to avoid collision. When adding a new pay cycle or period behaviour, add an inline scenario in the test file (preferred) and optionally a matching fixture.
 
 ## CSS conventions (`app/globals.css`)
 
