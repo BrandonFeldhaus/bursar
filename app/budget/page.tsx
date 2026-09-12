@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { loadState, newId, saveState, type BudgetCategory, type BudgetState } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
@@ -10,9 +10,8 @@ import { moneyFmt } from "../lib/currency";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { AddCategoryForm, emptyCategoryDraft, type CategoryFormDraft } from "../components/AddCategoryForm";
-import { BottomSheet } from "../components/BottomSheet";
-import { jumpToAddForm } from "../lib/jumpToAddForm";
-import { useIsMobile } from "../lib/useIsMobile";
+import { FormDialog } from "../components/FormDialog";
+import { Hint, dismissHint, type HintId } from "../components/Hint";
 
 function AllocationRing({
   segments,
@@ -32,8 +31,8 @@ function AllocationRing({
   const circ = 2 * Math.PI * r;
   let acc = 0;
   return (
-    <div style={{ position: "relative", width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+    <div className="ring">
+      <svg className="ring__svg" width={size} height={size}>
         <circle cx={c} cy={c} r={r} fill="none" stroke="var(--surface-sunk)" strokeWidth={stroke} />
         {segments.map((s, i) => {
           const frac = total > 0 ? s.value / total : 0;
@@ -43,27 +42,27 @@ function AllocationRing({
           return (
             <circle
               key={i}
+              className="ring__segment"
               cx={c} cy={c} r={r}
               fill="none"
-              stroke={s.color}
               strokeWidth={stroke}
               strokeDasharray={`${dash} ${circ - dash}`}
               strokeDashoffset={-offset}
-              style={{ transition: "stroke-dasharray 300ms" }}
+              style={{ "--swatch": s.color } as CSSProperties}
             />
           );
         })}
       </svg>
       {(label || sublabel) && (
-        <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center" }}>
+        <div className="ring__center">
           <div>
             {label && (
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 32, lineHeight: 1, color: "var(--ink-1)" }}>
+              <div className="ring__label">
                 {label}
               </div>
             )}
             {sublabel && (
-              <div style={{ fontFamily: "var(--font-stamp)", fontSize: 9, letterSpacing: "0.18em", color: "var(--ink-3)", marginTop: 4, textTransform: "uppercase" }}>
+              <div className="ring__sublabel">
                 {sublabel}
               </div>
             )}
@@ -74,11 +73,10 @@ function AllocationRing({
   );
 }
 
-const COLORS = ["#2b2a26", "#5b5852", "#8a877e", "#b6301f", "#2f6a4a", "#a0522d", "#8b6f47"];
+const COLORS = Array.from({ length: 7 }, (_, i) => `var(--chart-${i + 1})`);
 
 export default function BudgetPage() {
   const hydrated = useHydrated();
-  const isMobile = useIsMobile();
   const [state, setState] = useState<BudgetState | null>(null);
   const [draft, setDraft] = useState<CategoryFormDraft>(emptyCategoryDraft);
   const [addOpen, setAddOpen] = useState(false);
@@ -95,6 +93,10 @@ export default function BudgetPage() {
     if (!hydrated || !state) return;
     saveState(state);
   }, [hydrated, state]);
+
+  function dismiss(id: HintId) {
+    setState((s) => (s ? dismissHint(s, id) : s));
+  }
 
   function update(id: string, patch: Partial<BudgetCategory>) {
     setState((s) => s ? { ...s, budgetCategories: s.budgetCategories.map((c) => (c.id === id ? { ...c, ...patch } : c)) } : s);
@@ -169,11 +171,10 @@ export default function BudgetPage() {
     return (
       <section className="container" aria-busy="true">
         <header className="sheet page-head">
-          <p className="kicker">Budget</p>
-          <h1 className="page-head__title">Allocation plan</h1>
-          <p className="page-head__lead">Loading budget categories…</p>
+          <h1 className="page-head__title">Budget</h1>
+          <p className="page-head__lead">Loading budget…</p>
         </header>
-        <div className="sheet" style={{ padding: "20px 28px" }} aria-hidden="true">
+        <div className="sheet skeleton-card" aria-hidden="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="skeleton skeleton--row" />
           ))}
@@ -189,22 +190,23 @@ export default function BudgetPage() {
     <section className="container">
       {/* Page head */}
       <header className="sheet page-head">
-        <p className="kicker">Budget</p>
-        <h1 className="page-head__title">Allocation plan</h1>
+        <h1 className="page-head__title">Budget</h1>
         <p className="page-head__lead">Decide how each paycheck's leftover gets divided. Fixed amounts are reserved first; percentages split whatever remains.</p>
       </header>
 
+      <Hint id="budget" hints={state.meta.hints} onDismiss={dismiss} />
+
       {/* Stats row */}
       <div className="stat-row">
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Percent planned</div>
           <div className="stat__value">{percentTotal.toFixed(0)}%</div>
         </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Fixed planned</div>
           <div className="stat__value">{moneyFmt(fixedTotal)}</div>
         </article>
-        <article className="sheet stat stat--accent" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat stat--accent sheet--stat">
           <div className="stat__label">Status</div>
           <div className={`stat__value${overdrawn ? " stat__value--neg" : ""}`}>
             {overdrawn ? "Overdrawn" : "In balance"}
@@ -213,7 +215,7 @@ export default function BudgetPage() {
       </div>
 
       {/* Allocation ring */}
-      <div className="sheet" style={{ padding: "24px 28px" }}>
+      <div className="sheet ring-card">
         <div className="ring-wrap">
           <AllocationRing
             segments={segments}
@@ -222,19 +224,18 @@ export default function BudgetPage() {
             sublabel="of remainder"
           />
           <div>
-            <p className="kicker">Distribution</p>
             <h2 className="section-title mb-3">Where each dollar goes</h2>
             <div className="allocation-list">
               {segments.map((s, i) => (
                 <div key={i} className="allocation-row">
                   <div className="allocation-label">
-                    <span style={{ width: 12, height: 12, borderRadius: 2, background: s.color, flexShrink: 0, display: "inline-block" }} />
+                    <span className="allocation-swatch" style={{ "--swatch": s.color } as CSSProperties} />
                     <span className="allocation-name">{s.name}</span>
                   </div>
                   <div className="allocation-bar">
                     <div
-                      className={`allocation-bar__fill${s.value > 100 ? " allocation-bar__fill--over" : ""}`}
-                      style={{ width: `${Math.min(100, s.value)}%`, background: s.color }}
+                      className={`allocation-bar__fill allocation-bar__fill--swatch${s.value > 100 ? " allocation-bar__fill--over" : ""}`}
+                      style={{ "--pct": `${Math.min(100, s.value)}%`, "--swatch": s.color } as CSSProperties}
                     />
                   </div>
                   <span className="allocation-amount">
@@ -247,32 +248,36 @@ export default function BudgetPage() {
         </div>
       </div>
 
-      {/* Budget entries table */}
-      <div className="sheet" style={{ paddingTop: "20px", paddingBottom: 0 }}>
-        <div style={{ padding: "0 28px" }} className="row-between mb-3">
-          <div>
-            <p className="kicker">Categories</p>
-            <h2 className="section-title">Budget entries</h2>
+      {/* Categories table */}
+      <div className="sheet table-card">
+        <div className="table-card__head row-between mb-3">
+          <div className="table-card__title">
+            <h2 className="section-title">Categories</h2>
+            <SavedIndicator visible={savedIndicator.visible} />
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              type="button"
-              className="btn mobile-only-inline btn--jump"
-              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
-            >
-              <IconPlus size={12} aria-hidden="true" />Add category
+          <div className="table-card__actions">
+            <button type="button" className="btn btn--add" onClick={() => setAddOpen(true)}>
+              <IconPlus size={14} aria-hidden="true" />Add category
             </button>
-            <span className={`badge mobile-hidden${overdrawn ? " badge--red" : ""}`}>{percentTotal.toFixed(0)}% of remainder</span>
+            {cats.length > 0 && (
+              <span className={`badge mobile-hidden${overdrawn ? " badge--red" : ""}`}>{percentTotal.toFixed(0)}% of remainder</span>
+            )}
           </div>
         </div>
 
-        <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
-          <table className="ledger-table ledger-table--responsive">
+        {cats.length === 0 ? (
+          <div className="table-empty">
+            <p className="table-empty__text">No categories yet.</p>
+            <button type="button" className="btn" onClick={() => setAddOpen(true)}>Add your first category</button>
+          </div>
+        ) : (
+        <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
+          <table className="ledger-table ledger-table--responsive ledger-table--budget">
             <thead>
               <tr>
-                <th style={{ width: "50%" }}>Category</th>
-                <th style={{ width: "22%" }}>Type</th>
-                <th className="text-right" style={{ width: "22%" }}>Value</th>
+                <th>Category</th>
+                <th>Type</th>
+                <th className="text-right">Value</th>
                 <th className="text-tight" />
               </tr>
             </thead>
@@ -280,12 +285,13 @@ export default function BudgetPage() {
               {cats.map((c) => (
                   <tr key={c.id}>
                     <td data-label="Category">
-                      <input className="input" value={c.name} onChange={(e) => update(c.id, { name: e.target.value })} />
+                      <input className="input" value={c.name} aria-label="Category name" onChange={(e) => update(c.id, { name: e.target.value })} />
                     </td>
                     <td data-label="Type">
                       <select
                         className="select"
                         value={c.mode}
+                        aria-label="Category type"
                         onChange={(e) => update(c.id, { mode: e.target.value as "percent" | "fixed" })}
                       >
                         <option value="percent">Percent</option>
@@ -298,6 +304,7 @@ export default function BudgetPage() {
                         type="text"
                         inputMode="decimal"
                         value={c.value}
+                        aria-label="Category value"
                         onChange={(e) =>
                           update(c.id, { value: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) })
                         }
@@ -314,28 +321,20 @@ export default function BudgetPage() {
             </tbody>
           </table>
         </div>
-
-        {/* Inline add form (desktop) */}
-        {!isMobile && (
-          <AddCategoryForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={add} attempted={attempted} />
         )}
       </div>
 
-      {/* Mobile add sheet */}
-      {isMobile && addOpen && (
-        <BottomSheet open title="Add category" onClose={() => setAddOpen(false)}>
-          <AddCategoryForm
-            inSheet
-            draft={draft}
-            setDraft={setDraft}
-            onAdd={() => { if (add()) setAddOpen(false); }}
-            attempted={attempted}
-          />
-        </BottomSheet>
-      )}
+      {/* "+ Add category": dialog on desktop, bottom sheet on mobile */}
+      <FormDialog open={addOpen} title="Add category" onClose={() => setAddOpen(false)}>
+        <AddCategoryForm
+          inSheet
+          draft={draft}
+          setDraft={setDraft}
+          onAdd={() => { if (add()) setAddOpen(false); }}
+          attempted={attempted}
+        />
+      </FormDialog>
 
-      {/* SavedIndicator and UndoToast */}
-      <SavedIndicator visible={savedIndicator.visible} />
       <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </section>
   );

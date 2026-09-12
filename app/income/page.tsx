@@ -1,148 +1,21 @@
 "use client";
 
-import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { IconInfoCircle, IconPlus, IconX } from "@tabler/icons-react";
-import { loadState, newId, saveState, type BudgetState, type Income, type PayCycle } from "../lib/storage";
+import { loadState, saveState, type BudgetState, type Income, type PayCycle } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
-import { useIsMobile } from "../lib/useIsMobile";
 import { todayISO, monthlyIncomeOf } from "../lib/month";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
-import { BottomSheet } from "../components/BottomSheet";
+import { FormDialog } from "../components/FormDialog";
 import { moneyFmt } from "../lib/currency";
-import { jumpToAddForm } from "../lib/jumpToAddForm";
-
-const needsAnchor = (cycle: PayCycle) => cycle === "biweekly" || cycle === "weekly";
-
-const CYCLE_OPTIONS: { value: PayCycle; label: string }[] = [
-  { value: "weekly", label: "Weekly" },
-  { value: "biweekly", label: "Bi-weekly" },
-  { value: "semimonthly", label: "Semi-monthly" },
-];
-
-type SourceDraft = {
-  name: string;
-  amount: string;
-  payCycle: PayCycle;
-  lastPaycheckDate: string;
-};
-
-function sourceDraftErrors(draft: SourceDraft) {
-  const parsedAmount = Number(draft.amount.replace(/[^0-9.]/g, ""));
-  return {
-    parsedAmount,
-    name: !draft.name.trim() ? "Required" : null,
-    amount: !(parsedAmount > 0) ? "Must be more than 0" : null,
-    date: needsAnchor(draft.payCycle) && !draft.lastPaycheckDate ? "Pick a paycheck date" : null,
-  };
-}
-
-function AddSourceForm({
-  draft,
-  setDraft,
-  onAdd,
-  attempted,
-  formId,
-  inSheet,
-}: {
-  draft: SourceDraft;
-  setDraft: Dispatch<SetStateAction<SourceDraft>>;
-  onAdd: () => void;
-  attempted?: boolean;
-  formId?: string;
-  inSheet?: boolean;
-}) {
-  const errs = sourceDraftErrors(draft);
-  return (
-    <div id={formId} className={`inline-form${needsAnchor(draft.payCycle) ? " inline-form--4col" : ""}${inSheet ? " inline-form--sheet" : ""}`}>
-      <div className={`field${attempted && errs.name ? " field--has-error" : ""}`}>
-        <label className="field__label" htmlFor="inc-draft-name">New source</label>
-        <input
-          id="inc-draft-name"
-          className="input"
-          placeholder="e.g. Day job"
-          value={draft.name}
-          aria-invalid={attempted && !!errs.name}
-          aria-describedby={attempted && errs.name ? "inc-draft-name-err" : undefined}
-          onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-        />
-        {attempted && errs.name && (
-          <span id="inc-draft-name-err" className="field__error">{errs.name}</span>
-        )}
-      </div>
-      <div className={`field${attempted && errs.amount ? " field--has-error" : ""}`}>
-        <label className="field__label" htmlFor="inc-draft-amount">Amount</label>
-        <input
-          id="inc-draft-amount"
-          className="input input--mono"
-          type="text"
-          inputMode="decimal"
-          pattern="[0-9.]*"
-          placeholder="0"
-          value={draft.amount}
-          aria-invalid={attempted && !!errs.amount}
-          aria-describedby={attempted && errs.amount ? "inc-draft-amount-err" : undefined}
-          onChange={(e) =>
-            setDraft((d) => ({ ...d, amount: e.target.value.replace(/[^0-9.]/g, "") }))
-          }
-        />
-        {attempted && errs.amount && (
-          <span id="inc-draft-amount-err" className="field__error">{errs.amount}</span>
-        )}
-      </div>
-      <div className="field">
-        <label className="field__label">Cycle</label>
-        <select
-          className="select"
-          value={draft.payCycle}
-          onChange={(e) => {
-            const next = e.target.value as PayCycle;
-            setDraft((d) => ({
-              ...d,
-              payCycle: next,
-              lastPaycheckDate: needsAnchor(next) ? d.lastPaycheckDate || todayISO() : "",
-            }));
-          }}
-        >
-          {CYCLE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-      </div>
-      {needsAnchor(draft.payCycle) && (
-        <div className={`field${attempted && errs.date ? " field--has-error" : ""}`}>
-          <label className="field__label" htmlFor="inc-draft-date">Last paycheck</label>
-          <input
-            id="inc-draft-date"
-            className="input"
-            type="date"
-            value={draft.lastPaycheckDate}
-            aria-invalid={attempted && !!errs.date}
-            aria-describedby={attempted && errs.date ? "inc-draft-date-err" : undefined}
-            onChange={(e) => setDraft((d) => ({ ...d, lastPaycheckDate: e.target.value }))}
-          />
-          {attempted && errs.date && (
-            <span id="inc-draft-date-err" className="field__error">{errs.date}</span>
-          )}
-        </div>
-      )}
-      <button className="btn" type="button" onClick={onAdd}>
-        Add source
-      </button>
-    </div>
-  );
-}
+import { AddSourceForm, CYCLE_OPTIONS, emptySourceDraft, incomeFromDraft, needsAnchor, sourceDraftErrors, type SourceDraft } from "../components/AddSourceForm";
+import { Hint, dismissHint, type HintId } from "../components/Hint";
 
 export default function IncomePage() {
   const hydrated = useHydrated();
-  const isMobile = useIsMobile();
   const [state, setState] = useState<BudgetState | null>(null);
-  const [draft, setDraft] = useState<SourceDraft>({
-    name: "",
-    amount: "",
-    payCycle: "biweekly",
-    lastPaycheckDate: todayISO(),
-  });
+  const [draft, setDraft] = useState<SourceDraft>(emptySourceDraft);
   const [addOpen, setAddOpen] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [undo, setUndo] = useState<UndoEntry | null>(null);
@@ -157,6 +30,10 @@ export default function IncomePage() {
     if (!hydrated || !state) return;
     saveState(state);
   }, [hydrated, state]);
+
+  function dismiss(id: HintId) {
+    setState((s) => (s ? dismissHint(s, id) : s));
+  }
 
   function update(id: string, patch: Partial<Income>) {
     setState((s) => s ? { ...s, incomes: s.incomes.map((i) => (i.id === id ? { ...i, ...patch } : i)) } : s);
@@ -192,25 +69,9 @@ export default function IncomePage() {
       setAttempted(true);
       return false;
     }
-    const name = draft.name.trim();
-    setState((s) => {
-      if (!s) return s;
-      return {
-        ...s,
-        incomes: [
-          ...s.incomes,
-          {
-            id: newId(),
-            name,
-            amount: Math.max(0, errs.parsedAmount),
-            cadence: "monthly" as const,
-            payCycle: draft.payCycle,
-            lastPaycheckDate: needsAnchor(draft.payCycle) ? draft.lastPaycheckDate || todayISO() : "",
-          },
-        ],
-      };
-    });
-    setDraft({ name: "", amount: "", payCycle: "biweekly", lastPaycheckDate: todayISO() });
+    const income = incomeFromDraft(draft, errs);
+    setState((s) => (s ? { ...s, incomes: [...s.incomes, income] } : s));
+    setDraft(emptySourceDraft());
     setAttempted(false);
     saved.flash();
     return true;
@@ -220,11 +81,10 @@ export default function IncomePage() {
     return (
       <section className="container" aria-busy="true">
         <header className="sheet page-head">
-          <p className="kicker">Income</p>
-          <h1 className="page-head__title">Income ledger</h1>
-          <p className="page-head__lead">Loading income entries…</p>
+          <h1 className="page-head__title">Income</h1>
+          <p className="page-head__lead">Loading income…</p>
         </header>
-        <div className="sheet" style={{ padding: "20px 28px" }} aria-hidden="true">
+        <div className="sheet skeleton-card" aria-hidden="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="skeleton skeleton--row" />
           ))}
@@ -243,8 +103,7 @@ export default function IncomePage() {
     <section className="container">
       {/* Page head */}
       <header className="sheet page-head">
-        <p className="kicker">Income</p>
-        <h1 className="page-head__title">Income ledger</h1>
+        <h1 className="page-head__title">Income</h1>
         <p className="page-head__lead">Track all your income sources. Each one's paycheck dates are calculated independently and feed into your period breakdown.</p>
         <details className="cycle-info">
           <summary><IconInfoCircle size={14} aria-hidden="true" />About pay cycle types</summary>
@@ -265,56 +124,59 @@ export default function IncomePage() {
         </details>
       </header>
 
+      <Hint id="income" hints={state.meta.hints} onDismiss={dismiss} />
+
       {/* Stats row */}
       <div className="stat-row stat-row--4">
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Monthly income</div>
           <div className="stat__value">{moneyFmt(monthly)}</div>
         </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Weekly sources</div>
           <div className="stat__value">{weeklyCount}</div>
         </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Bi-weekly sources</div>
           <div className="stat__value">{biweeklyCount}</div>
         </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
+        <article className="sheet stat sheet--stat">
           <div className="stat__label">Semi-monthly sources</div>
           <div className="stat__value">{semiCount}</div>
         </article>
       </div>
 
-      {/* Ledger table */}
-      <div className="sheet" style={{ paddingTop: "20px", paddingBottom: 0 }}>
-        <div style={{ padding: "0 28px" }} className="row-between mb-3">
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-            <div>
-              <p className="kicker">Sources</p>
-              <h2 className="section-title">All inflow lines</h2>
-            </div>
+      {/* Income table */}
+      <div className="sheet table-card">
+        <div className="table-card__head row-between mb-3">
+          <div className="table-card__title">
+            <h2 className="section-title">All sources</h2>
             <SavedIndicator visible={saved.visible} />
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              type="button"
-              className="btn mobile-only-inline btn--jump"
-              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
-            >
-              <IconPlus size={12} aria-hidden="true" />Add source
+          <div className="table-card__actions">
+            <button type="button" className="btn btn--add" onClick={() => setAddOpen(true)}>
+              <IconPlus size={14} aria-hidden="true" />Add income
             </button>
-            <span className="badge mobile-hidden">{state.incomes.length} sources</span>
+            {state.incomes.length > 0 && (
+              <span className="badge mobile-hidden">{state.incomes.length} {state.incomes.length === 1 ? "source" : "sources"}</span>
+            )}
           </div>
         </div>
 
-        <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
-          <table className="ledger-table ledger-table--responsive">
+        {state.incomes.length === 0 ? (
+          <div className="table-empty">
+            <p className="table-empty__text">No income yet.</p>
+            <button type="button" className="btn" onClick={() => setAddOpen(true)}>Add your first income</button>
+          </div>
+        ) : (
+        <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
+          <table className="ledger-table ledger-table--responsive ledger-table--income">
             <thead>
               <tr>
-                <th style={{ width: "30%" }}>Source</th>
-                <th className="text-right" style={{ width: "20%" }}>Amount</th>
-                <th style={{ width: "20%" }}>Cycle</th>
-                <th style={{ width: "25%" }}>Anchor / Days</th>
+                <th>Source</th>
+                <th className="text-right">Amount</th>
+                <th>Pay cycle</th>
+                <th>Last paycheck</th>
                 <th className="text-tight" />
               </tr>
             </thead>
@@ -342,7 +204,7 @@ export default function IncomePage() {
                       }
                     />
                   </td>
-                  <td data-label="Cycle">
+                  <td data-label="Pay cycle">
                     <select
                       className="select"
                       value={inc.payCycle}
@@ -360,7 +222,7 @@ export default function IncomePage() {
                       ))}
                     </select>
                   </td>
-                  <td data-label="Anchor">
+                  <td data-label="Last paycheck">
                     {needsAnchor(inc.payCycle) ? (
                       <input
                         className="input"
@@ -370,7 +232,7 @@ export default function IncomePage() {
                         onChange={(e) => update(inc.id, { lastPaycheckDate: e.target.value })}
                       />
                     ) : (
-                      <span className="muted" style={{ fontStyle: "italic" }}>1st &amp; 15th</span>
+                      <span className="muted muted--italic">1st &amp; 15th</span>
                     )}
                   </td>
                   <td className="text-tight">
@@ -388,25 +250,19 @@ export default function IncomePage() {
             </tbody>
           </table>
         </div>
-
-        {/* Inline add form (desktop) */}
-        {!isMobile && (
-          <AddSourceForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={add} attempted={attempted} />
         )}
       </div>
 
-      {/* Mobile add sheet */}
-      {isMobile && addOpen && (
-        <BottomSheet open title="Add source" onClose={() => setAddOpen(false)}>
-          <AddSourceForm
-            inSheet
-            draft={draft}
-            setDraft={setDraft}
-            onAdd={() => { if (add()) setAddOpen(false); }}
-            attempted={attempted}
-          />
-        </BottomSheet>
-      )}
+      {/* "+ Add income": dialog on desktop, bottom sheet on mobile */}
+      <FormDialog open={addOpen} title="Add income" onClose={() => setAddOpen(false)}>
+        <AddSourceForm
+          inSheet
+          draft={draft}
+          setDraft={setDraft}
+          onAdd={() => { if (add()) setAddOpen(false); }}
+          attempted={attempted}
+        />
+      </FormDialog>
       <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </section>
   );

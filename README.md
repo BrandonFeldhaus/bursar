@@ -11,20 +11,22 @@ The app stores data in your browser's `localStorage`. There is no account, no ba
 - **Recurring bills.** Track monthly and annual bills and the day of the month they hit. Bills are auto-assigned to the paycheck period they fall in.
 - **Paid/unpaid status per period.** Mark bills paid one period at a time without losing the recurring schedule.
 - **Calendar view.** See bills laid out on a monthly calendar from the Expenses page.
-- **Leftover allocation plan.** Build a budget for leftover cash using percentage categories, fixed-dollar categories, or a mix. The app flags when your plan is overdrawn.
-- **3-step onboarding.** New users are walked through Income → Bills → Plan before landing on the home view.
+- **Budget for what's left.** Split leftover cash using percentage categories, fixed-dollar categories, or a mix. The app flags when your plan is overdrawn.
+- **Goals with funding sources.** A savings or debt goal is funded from budget categories or bills; tick it on a paycheck period to add that amount, and see roughly how many paychecks are left.
+- **No setup wizard.** A fresh ledger opens straight on the Overview; the first period card walks you through adding a paycheck, importing a saved file, or loading sample data.
+- **Automatic month snapshots.** Past months keep the income, bills, and budget they had at the time; paid marks and goal contributions stay editable in every month.
 - **Export / import JSON.** Back up or move your data from the Settings page. Older `paperInkLedger:v1` exports still import.
 
 ## Pages
 
 | Route | Purpose |
 |---|---|
-| `/` | Home — paycheck period cards for the selected month |
+| `/` | Overview — paycheck period cards for the selected month, current period first |
 | `/income` | Add and edit income sources |
-| `/expenses` | Recurring bills + calendar view |
-| `/budget` | Allocation plan (percent + fixed categories) |
-| `/settings` | Export / import JSON, reset onboarding |
-| `/onboarding` | First-run setup flow |
+| `/expenses` | Bills — recurring bills + calendar view |
+| `/budget` | Budget — percent + fixed categories |
+| `/goals` | Savings and debt goals, funded from categories or bills |
+| `/settings` | Export / import JSON, erase all data |
 
 ## Development
 

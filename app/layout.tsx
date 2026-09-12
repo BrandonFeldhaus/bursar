@@ -3,11 +3,10 @@ import Script from "next/script";
 import "./globals.css";
 import { SiteHeader } from "./components/SiteHeader";
 import { BottomNav } from "./components/BottomNav";
-import { OnboardingGate } from "./components/OnboardingGate";
 
 export const metadata: Metadata = {
   title: "Bursar",
-  description: "A ledger-style paycheck budgeting workspace for income, expenses, and budget planning.",
+  description: "A paycheck-period budgeting app for income, bills, budget, and goals. Data stays in your browser.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -25,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteHeader />
 
         <main id="main" className="main">
-          <OnboardingGate>{children}</OnboardingGate>
+          {children}
         </main>
 
         <footer className="footer" aria-label="Footer">

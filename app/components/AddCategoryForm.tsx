@@ -12,22 +12,21 @@ export function AddCategoryForm({
   setDraft,
   onAdd,
   attempted,
-  formId,
   inSheet,
 }: {
   draft: CategoryFormDraft;
   setDraft: Dispatch<SetStateAction<CategoryFormDraft>>;
   onAdd: () => void;
   attempted?: boolean;
-  formId?: string;
+  /** Renders inside FormDialog / BottomSheet — drops the sunk background/padding. */
   inSheet?: boolean;
 }) {
   const nameError = !draft.name.trim() ? "Required" : null;
   const valueError = draft.value <= 0 ? "Must be more than 0" : null;
   return (
-    <div id={formId} className={`inline-form${inSheet ? " inline-form--sheet" : ""}`}>
+    <div className={`inline-form${inSheet ? " inline-form--sheet" : ""}`}>
       <div className={`field${attempted && nameError ? " field--has-error" : ""}`}>
-        <label className="field__label" htmlFor="cat-draft-name">New category</label>
+        <label className="field__label" htmlFor="cat-draft-name">Name</label>
         <input
           id="cat-draft-name"
           className="input"
@@ -42,8 +41,9 @@ export function AddCategoryForm({
         )}
       </div>
       <div className="field">
-        <label className="field__label">Type</label>
+        <label className="field__label" htmlFor="cat-draft-mode">Type</label>
         <select
+          id="cat-draft-mode"
           className="select"
           value={draft.mode}
           onChange={(e) => setDraft((d) => ({ ...d, mode: e.target.value as "percent" | "fixed" }))}

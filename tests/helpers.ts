@@ -7,7 +7,7 @@ export function makeState(
 ): BudgetState {
   return {
     settings: { payCycleType: "biweekly", paycheckAmount: 0 },
-    meta: { onboardingComplete: true, version: 1, createdAt: "" },
+    meta: { onboardingComplete: true, version: 1, createdAt: "", hints: [] },
     incomeMonthly: 0,
     payCycle: "biweekly",
     lastPaycheckDate: "",

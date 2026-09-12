@@ -1,6 +1,7 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
+import { newId, type RecurringExpense } from "../lib/storage";
 
 export type BillFormDraft = {
   name: string;
@@ -21,6 +22,19 @@ export function billDraftErrors(draft: BillFormDraft) {
   };
 }
 
+/** Build the stored bill from a validated draft (`errs` from billDraftErrors). */
+export function expenseFromDraft(draft: BillFormDraft, errs: ReturnType<typeof billDraftErrors>): RecurringExpense {
+  return {
+    id: newId(),
+    name: draft.name.trim(),
+    amount: Math.max(0, errs.parsedAmount),
+    cadence: draft.cadence,
+    dueDay: draft.dueDay,
+    dueMonth: draft.dueMonth,
+    paidPeriods: [],
+  };
+}
+
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => (
   <option key={i + 1} value={i + 1}>
     {new Date(2026, i, 1).toLocaleDateString("en-US", { month: "short" })}
@@ -32,7 +46,6 @@ export function AddBillForm({
   setDraft,
   onAdd,
   attempted,
-  formId,
   inSheet,
   combinedDue,
 }: {
@@ -40,10 +53,9 @@ export function AddBillForm({
   setDraft: Dispatch<SetStateAction<BillFormDraft>>;
   onAdd: () => void;
   attempted?: boolean;
-  formId?: string;
-  /** Renders inside the mobile BottomSheet — drops the sunk background/padding. */
+  /** Renders inside FormDialog / BottomSheet — drops the sunk background/padding. */
   inSheet?: boolean;
-  /** Merge due day + annual month into one field (onboarding's narrow card). */
+  /** Merge due day + annual month into one field (narrow containers). */
   combinedDue?: boolean;
 }) {
   const errs = billDraftErrors(draft);
@@ -51,13 +63,12 @@ export function AddBillForm({
   const dueDayInput = (
     <input
       id="bill-draft-day"
-      className="input input--mono"
+      className={`input input--mono${combinedDue ? " input--day" : ""}`}
       type="text"
       inputMode="numeric"
       pattern="[0-9]*"
       placeholder="1"
       value={draft.dueDay || ""}
-      style={combinedDue ? { width: "52px", flexShrink: 0 } : undefined}
       onChange={(e) => {
         const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
         const n = digits === "" ? 0 : Math.min(31, Number(digits));
@@ -77,9 +88,9 @@ export function AddBillForm({
     </select>
   );
   return (
-    <div id={formId} className={`inline-form${cols}${inSheet ? " inline-form--sheet" : ""}`}>
+    <div className={`inline-form${cols}${inSheet ? " inline-form--sheet" : ""}`}>
       <div className={`field${attempted && errs.name ? " field--has-error" : ""}`}>
-        <label className="field__label" htmlFor="bill-draft-name">New notation</label>
+        <label className="field__label" htmlFor="bill-draft-name">Name</label>
         <input
           id="bill-draft-name"
           className="input"
@@ -114,8 +125,9 @@ export function AddBillForm({
         )}
       </div>
       <div className="field">
-        <label className="field__label">Cadence</label>
+        <label className="field__label" htmlFor="bill-draft-cadence">Repeats</label>
         <select
+          id="bill-draft-cadence"
           className="select"
           value={draft.cadence}
           onChange={(e) => setDraft((d) => ({ ...d, cadence: e.target.value as "monthly" | "annual" }))}
@@ -129,7 +141,7 @@ export function AddBillForm({
           <label className="field__label" htmlFor="bill-draft-day">
             Due{draft.cadence === "annual" ? " day / month" : " day"}
           </label>
-          <div style={{ display: "flex", gap: 6 }}>
+          <div className="field__row">
             {dueDayInput}
             {draft.cadence === "annual" && monthSelect}
           </div>

@@ -1,9 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type KeyboardEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { loadState, saveState, type BudgetState } from "./lib/storage";
+import { IconChevronDown, IconPlus } from "@tabler/icons-react";
 import {
+  loadState,
+  saveState,
+  type BudgetCategory,
+  type BudgetState,
+  type Goal,
+  type LockedMonth,
+} from "./lib/storage";
+import {
+  annualSetAside,
   currentMonthKey,
   formatMonthLabel,
   formatShortDate,
@@ -13,19 +22,38 @@ import {
   type PaycheckPeriod,
   recurringDueDate,
   shiftMonth,
-  annualSetAside,
 } from "./lib/month";
+import { backfillSnapshots, upsertSnapshot, viewStateForMonth } from "./lib/monthView";
+import { sampleData } from "./lib/sampleData";
 import { useHydrated } from "./lib/useHydrated";
+import { useIsMobile } from "./lib/useIsMobile";
 import { moneyFmt } from "./lib/currency";
+import { computeAllocations } from "./lib/allocations";
+import { goalFundingTotal } from "./lib/goalFunding";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { FormDialog } from "./components/FormDialog";
+import { OverflowMenu } from "./components/OverflowMenu";
+import { ImportLedgerButton } from "./components/ImportLedgerButton";
+import { Hint, dismissHint, type HintId } from "./components/Hint";
+import {
+  AddSourceForm,
+  emptySourceDraft,
+  incomeFromDraft,
+  sourceDraftErrors,
+  type SourceDraft,
+} from "./components/AddSourceForm";
+import {
+  AddBillForm,
+  billDraftErrors,
+  emptyBillDraft,
+  expenseFromDraft,
+  type BillFormDraft,
+} from "./components/AddBillForm";
 
 function Money({ value, struck = false }: { value: number; struck?: boolean }) {
   const v = Number(value) || 0;
   return (
-    <span
-      className={`money${v < 0 ? " money--neg" : ""}`}
-      style={{ fontSize: 17, textDecoration: struck ? "line-through" : "none", opacity: struck ? 0.55 : 1 }}
-    >
+    <span className={`money money--md${v < 0 ? " money--neg" : ""}${struck ? " money--struck" : ""}`}>
       {moneyFmt(v)}
     </span>
   );
@@ -62,14 +90,8 @@ function Timeline({
       <div className="timeline__rail">
         {todayDay != null && (
           <div
-            style={{
-              position: "absolute",
-              left: `${((todayDay - 1) / Math.max(lastDay - 1, 1)) * 100}%`,
-              top: -8, width: 1.5, height: 24,
-              background: "var(--signal-red)",
-              transform: "translateX(-50%)",
-              opacity: 0.6,
-            }}
+            className="timeline__today"
+            style={{ "--pos": `${((todayDay - 1) / Math.max(lastDay - 1, 1)) * 100}%` } as CSSProperties}
             title={`Today: day ${todayDay}`}
           />
         )}
@@ -83,8 +105,8 @@ function Timeline({
               : "timeline__tick timeline__tick--bill";
           return (
             <span key={i}>
-              <div className={cls} style={{ left: `${pct}%` }} title={`${e.tooltip}: ${e.label}`} />
-              <div className="timeline__lbl" style={{ left: `${pct}%` }}>{e.day}</div>
+              <div className={cls} style={{ "--pos": `${pct}%` } as CSSProperties} title={`${e.tooltip}: ${e.label}`} />
+              <div className="timeline__lbl" style={{ "--pos": `${pct}%` } as CSSProperties}>{e.day}</div>
             </span>
           );
         })}
@@ -95,28 +117,48 @@ function Timeline({
 
 type TabKey = "income" | "bills" | "leftover" | "goals";
 
-import type { BudgetCategory, Goal, LockedMonth } from "./lib/budgetStorage";
-import { computeAllocations } from "./lib/allocations";
-
 function PeriodCard({
   period,
   budgetCategories,
   goals,
+  hasIncome,
+  hasBills,
+  isCurrent,
   onTogglePaid,
   onToggleGoalPeriod,
-  readOnly = false,
+  body,
+  billsEmptyState,
+  incomeAddon,
+  billsAddon,
+  hint,
 }: {
   period: PaycheckPeriod;
   budgetCategories: BudgetCategory[];
   goals: Goal[];
+  /** The store has at least one income source (else the fallback halves are shown). */
+  hasIncome: boolean;
+  /** The store has at least one bill (else the Bills tab shows its empty state). */
+  hasBills: boolean;
+  isCurrent: boolean;
   onTogglePaid: (expenseId: string, periodId: string) => void;
   onToggleGoalPeriod: (goalId: string, periodId: string, amount: number) => void;
-  readOnly?: boolean;
+  /** Replaces the whole card body (first-run empty state). */
+  body?: ReactNode;
+  /** Rendered in the Bills tab when the store has no bills at all. */
+  billsEmptyState?: ReactNode;
+  /** Quick-add row at the bottom of the Income tab. */
+  incomeAddon?: ReactNode;
+  /** Quick-add row at the bottom of the Bills tab (when the store has bills). */
+  billsAddon?: ReactNode;
+  /** One-line hint rendered under the tab row. */
+  hint?: ReactNode;
 }) {
   const [tab, setTab] = useState<TabKey>("bills");
 
   const ordinal = ["st", "nd", "rd"][period.index - 1] ?? "th";
-  const kicker = period.total === 1
+  const kicker = !hasIncome
+    ? `Period ${period.index} of ${period.total}`
+    : period.total === 1
     ? "Only paycheck"
     : `${period.index}${ordinal} paycheck of ${period.total}`;
 
@@ -134,17 +176,10 @@ function PeriodCard({
 
   const periodId = `${period.monthKey}-${period.key}`;
 
+  // What each goal's funding sources come to in this period — shared with the goal editor via lib/goalFunding.ts.
   const goalItems = useMemo(() => {
     return goals.map((g) => {
-      const catAmount = g.linkedBudgetCategoryIds.reduce((s, catId) => {
-        const alloc = allocations.find((a) => a.id === catId);
-        return s + (alloc?.amount ?? 0);
-      }, 0);
-      const expAmount = g.linkedExpenseIds.reduce((s, expId) => {
-        const bill = period.bills.find((b) => b.expenseId === expId);
-        return s + (bill?.amount ?? 0);
-      }, 0);
-      const linkedAmount = catAmount + expAmount;
+      const linkedAmount = goalFundingTotal(g, allocations, period.bills);
       const applied = g.appliedPeriods.find((p) => p.periodId === periodId);
       const totalApplied =
         g.appliedPeriods.reduce((s, p) => s + p.amount, 0) +
@@ -159,284 +194,288 @@ function PeriodCard({
     [goalItems],
   );
 
+  const tabKeys: TabKey[] = goals.length > 0 ? ["income", "bills", "leftover", "goals"] : ["income", "bills", "leftover"];
+  const tabId = (key: TabKey) => `${periodId}-tab-${key}`;
+  const panelId = `${periodId}-panel`;
+
+  function onTabKeyDown(e: KeyboardEvent<HTMLButtonElement>, key: TabKey) {
+    const i = tabKeys.indexOf(key);
+    let next: TabKey | null = null;
+    if (e.key === "ArrowRight") next = tabKeys[(i + 1) % tabKeys.length];
+    else if (e.key === "ArrowLeft") next = tabKeys[(i - 1 + tabKeys.length) % tabKeys.length];
+    else if (e.key === "Home") next = tabKeys[0];
+    else if (e.key === "End") next = tabKeys[tabKeys.length - 1];
+    if (!next) return;
+    e.preventDefault();
+    setTab(next);
+    document.getElementById(tabId(next))?.focus();
+  }
+
   return (
-    <div className="sheet period-card">
+    <div className={`sheet period-card${isCurrent ? " period-card--current" : ""}`}>
       <div className="period-card__head">
         <div>
           <p className="kicker">{kicker}</p>
           <h3>{period.label}</h3>
         </div>
         <div className="row gap-sm">
+          {isCurrent && <span className="stamp stamp--sm stamp--current">Current</span>}
           {period.bills.length > 1 && period.bills.every((b) => b.paid) && (
-            <span className="stamp stamp--paid">Audited</span>
+            <span className="stamp stamp--sm stamp--paid">All paid</span>
           )}
-          <span className="badge">{period.entryCount} entries</span>
+          {body === undefined && (
+            <span className="badge">{period.entryCount} {period.entryCount === 1 ? "entry" : "entries"}</span>
+          )}
         </div>
       </div>
 
-      {billCount > 0 && (
-        <div
-          className="period-card__paid-strip"
-          aria-label={`${paidCount} of ${billCount} bills paid`}
-          title={`${paidCount} of ${billCount} bills paid`}
-        >
-          <span>Bills paid</span>
-          <div className="period-card__paid-bar">
+      {body !== undefined ? (
+        body
+      ) : (
+        <>
+          {billCount > 0 && (
             <div
-              className={`period-card__paid-bar__fill${paidCount === billCount ? " period-card__paid-bar__fill--all" : ""}`}
-              style={{ width: `${paidPct}%` }}
-            />
+              className="period-card__paid-strip"
+              aria-label={`${paidCount} of ${billCount} bills paid`}
+              title={`${paidCount} of ${billCount} bills paid`}
+            >
+              <span>Bills paid</span>
+              <div className="period-card__paid-bar">
+                <div
+                  className={`period-card__paid-bar__fill${paidCount === billCount ? " period-card__paid-bar__fill--all" : ""}`}
+                  style={{ "--pct": `${paidPct}%` } as CSSProperties}
+                />
+              </div>
+              <span className="period-card__paid-count">{paidCount}/{billCount}</span>
+            </div>
+          )}
+
+          {/* Tabs: income, bills, leftover, optional goals */}
+          <div className="period-card__tabs" role="tablist" aria-label={`${period.label} details`}>
+            {(
+              [
+                { key: "income", label: "Income", value: period.totalIncome, neg: false },
+                { key: "bills", label: "Bills", value: period.totalBills, neg: false },
+                { key: "leftover", label: "Leftover", value: period.leftover, neg: period.leftover < 0 },
+              ] as const
+            ).map(({ key, label, value, neg }) => (
+              <button
+                key={key}
+                id={tabId(key)}
+                type="button"
+                role="tab"
+                aria-selected={tab === key}
+                aria-controls={panelId}
+                tabIndex={tab === key ? 0 : -1}
+                className={`period-card__tab${tab === key ? " period-card__tab--active" : ""}`}
+                onClick={() => setTab(key)}
+                onKeyDown={(e) => onTabKeyDown(e, key)}
+              >
+                <span className="stat__label">{label}</span>
+                <span className={`stat__value${neg ? " stat__value--neg" : ""}`}>{moneyFmt(value)}</span>
+              </button>
+            ))}
+            {goals.length > 0 && (
+              <button
+                id={tabId("goals")}
+                type="button"
+                role="tab"
+                aria-selected={tab === "goals"}
+                aria-controls={panelId}
+                tabIndex={tab === "goals" ? 0 : -1}
+                className={`period-card__tab period-card__tab--goals${tab === "goals" ? " period-card__tab--active" : ""}`}
+                onClick={() => setTab("goals")}
+                onKeyDown={(e) => onTabKeyDown(e, "goals")}
+              >
+                <span className="stat__label">Goals</span>
+                <span className="period-card__goals-count">{goals.length} active</span>
+              </button>
+            )}
           </div>
-          <span className="period-card__paid-count">{paidCount}/{billCount}</span>
-        </div>
-      )}
 
-      {/* Tabbed panels: income, bills, leftover, optional goals */}
-      <div className="period-card__inline-stats" role="tablist">
-        {(
-          [
-            { key: "income", label: "Income", value: period.totalIncome, neg: false },
-            { key: "bills", label: "Bills", value: period.totalBills, neg: false },
-            { key: "leftover", label: "Leftover", value: period.leftover, neg: period.leftover < 0 },
-          ] as const
-        ).map(({ key, label, value, neg }) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={tab === key}
-            className={`period-card__tab period-card__inline-stat${tab === key ? " period-card__tab--active" : ""}`}
-            onClick={() => setTab(key)}
-          >
-            <div className="stat__label">{label}</div>
-            <div className={`stat__value${neg ? " stat__value--neg" : ""}`}>{moneyFmt(value)}</div>
-          </button>
-        ))}
-        {goals.length > 0 && (
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "goals"}
-            className={`period-card__goals-tab${tab === "goals" ? " period-card__goals-tab--active" : ""}`}
-            onClick={() => setTab("goals")}
-          >
-            <span className="stat__label">Goals</span>
-            <span className="period-card__goals-tab__count">{goals.length} active</span>
-          </button>
-        )}
-      </div>
+          {hint}
 
-      {/* List content driven by active tab */}
-      <div className="recent-list">
-        {tab === "income" && (
-          period.incomes.length === 0 ? (
-            <p className="muted" style={{ fontStyle: "italic" }}>No income in this period.</p>
-          ) : (
-            period.incomes.map((inc) => (
-              <div key={inc.id} className="recent-item">
-                <span className="recent-item__name">{inc.name}</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span className="recent-item__date">{formatShortDate(inc.date)}</span>
-                  <Money value={inc.amount} />
-                </span>
-              </div>
-            ))
-          )
-        )}
+          {/* Panel driven by the active tab */}
+          <div className="recent-list" role="tabpanel" id={panelId} aria-labelledby={tabId(tab)}>
+            {tab === "income" && (
+              <>
+                {period.incomes.length === 0 ? (
+                  <p className="muted muted--italic">No income in this period.</p>
+                ) : (
+                  period.incomes.map((inc) => (
+                    <div key={inc.id} className="recent-item">
+                      <span className="recent-item__name">{inc.name}</span>
+                      <span className="recent-item__group recent-item__group--wide">
+                        <span className="recent-item__date">{formatShortDate(inc.date)}</span>
+                        <Money value={inc.amount} />
+                      </span>
+                    </div>
+                  ))
+                )}
+                {incomeAddon}
+              </>
+            )}
 
-        {tab === "bills" && (
-          period.bills.length === 0 ? (
-            <p className="muted" style={{ fontStyle: "italic" }}>No bills due in this period.</p>
-          ) : (
-            period.bills.map((b) => (
-              <div key={b.id} className={`recent-item${b.paid ? " recent-item--paid" : ""}`}>
-                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={b.paid}
-                    onChange={() => !readOnly && onTogglePaid(b.expenseId, b.periodId)}
-                    disabled={readOnly}
-                    style={{ accentColor: "var(--ink-1)", cursor: readOnly ? "default" : "pointer", opacity: readOnly ? 0.5 : 1 }}
-                    title={readOnly ? "Locked — unlock month to edit" : (b.paid ? "Mark unpaid" : "Mark paid")}
-                  />
-                  <span className="recent-item__name">{b.name}</span>
-                  {b.cadence === "annual" && (
-                    <span className="badge" style={{ fontSize: 9 }}>annual</span>
-                  )}
-                </span>
-                <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span className="recent-item__date">{formatShortDate(b.date)}</span>
-                  <Money value={b.amount} struck={b.paid} />
-                </span>
-              </div>
-            ))
-          )
-        )}
-
-        {tab === "leftover" && (
-          allocations.length === 0 ? (
-            <p className="muted" style={{ fontStyle: "italic" }}>No budget categories set. Add them in the Budget page.</p>
-          ) : (
-            <>
-              {allocations.map((a) => (
-                <div key={a.id} className="recent-item">
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span className="recent-item__name">{a.name}</span>
-                    <span className="badge" style={{ fontSize: 9 }}>
-                      {a.mode === "percent" ? `${a.value}%` : "fixed"}
-                    </span>
-                  </span>
-                  <Money value={a.amount} />
-                </div>
-              ))}
-              {Math.abs(unallocated) > 0.005 && (
-                <div className="recent-item" style={{ opacity: 0.55 }}>
-                  <span className="recent-item__name" style={{ fontStyle: "italic" }}>Unallocated</span>
-                  <Money value={unallocated} />
-                </div>
-              )}
-            </>
-          )
-        )}
-
-        {tab === "goals" && (
-          goalItems.length === 0 ? (
-            <p className="muted" style={{ fontStyle: "italic" }}>No goals yet. Add them in the Goals page.</p>
-          ) : (
-            <>
-              {goalItems.map(({ goal, linkedAmount, isApplied, totalApplied, pct }) => (
-                <div key={goal.id} className="goal-period-item">
-                  <div className="recent-item" style={{ marginBottom: 0 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {tab === "bills" && (
+              !hasBills && billsEmptyState !== undefined ? (
+                billsEmptyState
+              ) : (
+              <>
+                {period.bills.length === 0 ? (
+                  <p className="muted muted--italic">No bills due in this period.</p>
+                ) : (
+                period.bills.map((b) => (
+                  <div key={b.id} className={`recent-item${b.paid ? " recent-item--paid" : ""}`}>
+                    <label className="recent-item__group recent-item__toggle">
                       <input
                         type="checkbox"
-                        checked={isApplied}
-                        onChange={() => !readOnly && onToggleGoalPeriod(goal.id, periodId, linkedAmount)}
-                        style={{ accentColor: "var(--ink-1)", cursor: (readOnly || linkedAmount <= 0) ? (readOnly ? "default" : "not-allowed") : "pointer", opacity: (readOnly || linkedAmount <= 0) ? 0.4 : 1 }}
-                        disabled={readOnly || linkedAmount <= 0}
-                        title={readOnly ? "Locked — unlock month to edit" : linkedAmount > 0
-                          ? (isApplied ? "Remove contribution" : "Apply contribution")
-                          : "No linked amount — set a link in Goals"
-                        }
+                        checked={b.paid}
+                        onChange={() => onTogglePaid(b.expenseId, b.periodId)}
+                        className="recent-item__check"
+                        title={b.paid ? "Mark unpaid" : "Mark paid"}
+                        aria-label={`${b.name} paid`}
                       />
-                      <span className="recent-item__name">{goal.name}</span>
-                      <span className="badge" style={{ fontSize: 9 }}>
-                        {goal.type === "savings" ? "savings" : "debt"}
-                      </span>
-                    </span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {linkedAmount > 0 ? (
-                        <Money value={linkedAmount} />
-                      ) : (
-                        <span style={{ fontFamily: "var(--font-stamp)", fontSize: 10, color: "var(--ink-4)", letterSpacing: "0.12em" }}>no link</span>
+                      <span className="recent-item__name">{b.name}</span>
+                      {b.cadence === "annual" && (
+                        <span className="badge badge--xs">annual</span>
                       )}
+                    </label>
+                    <span className="recent-item__group recent-item__group--wide">
+                      <span className="recent-item__date">{formatShortDate(b.date)}</span>
+                      <Money value={b.amount} struck={b.paid} />
                     </span>
                   </div>
-                  <div className="goal-period-item__bar">
-                    <div
-                      className="goal-period-item__fill"
-                      style={{
-                        width: `${pct}%`,
-                        background: pct >= 100 ? "#2f6a4a" : goal.type === "debt" ? "var(--signal-red)" : "var(--ink-1)",
-                      }}
-                    />
+                ))
+                )}
+                {billsAddon}
+              </>
+              )
+            )}
+
+            {tab === "leftover" && (
+              allocations.length === 0 ? (
+                <p className="muted muted--italic">
+                  Leftover isn’t planned yet. <Link href="/budget" className="text-link">Plan it on the Budget page.</Link>
+                </p>
+              ) : (
+                <>
+                  {allocations.map((a) => (
+                    <div key={a.id} className="recent-item">
+                      <span className="recent-item__group">
+                        <span className="recent-item__name">{a.name}</span>
+                        <span className="badge badge--xs">
+                          {a.mode === "percent" ? `${a.value}%` : "fixed"}
+                        </span>
+                      </span>
+                      <Money value={a.amount} />
+                    </div>
+                  ))}
+                  {Math.abs(unallocated) > 0.005 && (
+                    <div className="recent-item recent-item--faint">
+                      <span className="recent-item__name recent-item__name--italic">Unallocated</span>
+                      <Money value={unallocated} />
+                    </div>
+                  )}
+                </>
+              )
+            )}
+
+            {tab === "goals" && (
+              <>
+                {goalItems.map(({ goal, linkedAmount, isApplied, totalApplied, pct }) => (
+                  <div key={goal.id} className="goal-period-item">
+                    <div className="recent-item">
+                      <label className="recent-item__group recent-item__toggle">
+                        <input
+                          type="checkbox"
+                          checked={isApplied}
+                          onChange={() => onToggleGoalPeriod(goal.id, periodId, linkedAmount)}
+                          className={`recent-item__check${linkedAmount <= 0 ? " recent-item__check--nolink" : ""}`}
+                          disabled={linkedAmount <= 0}
+                          title={linkedAmount > 0
+                            ? (isApplied ? "Remove contribution" : "Apply contribution")
+                            : "Not funded yet — add funding sources on the Goals page"
+                          }
+                          aria-label={`${goal.name} contribution applied`}
+                        />
+                        <span className="recent-item__name">{goal.name}</span>
+                        <span className="badge badge--xs">
+                          {goal.type === "savings" ? "savings" : "debt"}
+                        </span>
+                      </label>
+                      <span className="recent-item__group">
+                        {linkedAmount > 0 ? (
+                          <Money value={linkedAmount} />
+                        ) : (
+                          <span className="goal-period-item__nolink">not funded</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="goal-period-item__bar">
+                      <div
+                        className={`goal-period-item__fill${pct >= 100 ? " goal-period-item__fill--done" : goal.type === "debt" ? " goal-period-item__fill--debt" : ""}`}
+                        style={{ "--pct": `${pct}%` } as CSSProperties}
+                      />
+                    </div>
+                    <div className="goal-period-item__meta">
+                      <span>{moneyFmt(totalApplied)} applied</span>
+                      <span>{pct.toFixed(0)}% of {moneyFmt(goal.targetAmount)}</span>
+                    </div>
                   </div>
-                  <div className="goal-period-item__meta">
-                    <span>{moneyFmt(totalApplied)} applied</span>
-                    <span>{pct.toFixed(0)}% of {moneyFmt(goal.targetAmount)}</span>
+                ))}
+                {totalGoalAmount > 0 && (
+                  <div className="recent-item recent-item--total">
+                    <span className="recent-item__name recent-item__name--italic">Total to goals</span>
+                    <Money value={totalGoalAmount} />
                   </div>
-                </div>
-              ))}
-              {totalGoalAmount > 0 && (
-                <div className="recent-item" style={{ marginTop: 4, opacity: 0.6 }}>
-                  <span className="recent-item__name" style={{ fontStyle: "italic" }}>Total linked</span>
-                  <Money value={totalGoalAmount} />
-                </div>
-              )}
-            </>
-          )
-        )}
-      </div>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
+type DialogKind = null | "source" | "bill";
+
 export default function Home() {
   const hydrated = useHydrated();
+  const isMobile = useIsMobile();
   const [state, setState] = useState<BudgetState | null>(null);
   const [month, setMonth] = useState(currentMonthKey());
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [unlockOpen, setUnlockOpen] = useState(false);
+  const [refreshOpen, setRefreshOpen] = useState(false);
+
+  // Add income / add bill: one FormDialog (centered on desktop, bottom sheet on mobile)
+  const [dialog, setDialog] = useState<DialogKind>(null);
+  const [sourceDraft, setSourceDraft] = useState<SourceDraft>(emptySourceDraft);
+  const [sourceAttempted, setSourceAttempted] = useState(false);
+  const [billDraft, setBillDraft] = useState<BillFormDraft>(emptyBillDraft);
+  const [billAttempted, setBillAttempted] = useState(false);
+  const [importStatus, setImportStatus] = useState("");
 
   useEffect(() => {
     if (!hydrated) return;
-    const loaded = loadState();
-    if (!loaded) {
-      setState(loaded);
-      return;
-    }
-
-    // Auto-archive every past month that hasn't been snapshotted yet.
-    // Uses current live data as the snapshot (same as the manual Archive button).
-    const cmk = currentMonthKey();
-    const createdMonthKey = loaded.meta.createdAt
-      ? loaded.meta.createdAt.slice(0, 7)
-      : shiftMonth(cmk, -12);
-
-    let s = loaded;
-    let m = shiftMonth(cmk, -1);
-    while (m >= createdMonthKey) {
-      if (!s.lockedMonths.some((lm) => lm.monthKey === m)) {
-        const snapshot: LockedMonth = {
-          monthKey: m,
-          lockedAt: new Date().toISOString(),
-          incomes: structuredClone(s.incomes),
-          recurringExpenses: structuredClone(s.recurringExpenses),
-          budgetCategories: structuredClone(s.budgetCategories),
-          goals: structuredClone(s.goals),
-        };
-        s = { ...s, lockedMonths: [...s.lockedMonths, snapshot] };
-      }
-      m = shiftMonth(m, -1);
-    }
-
-    setState(s);
+    // Snapshot every past month since createdAt that lacks one (definitions only).
+    setState(backfillSnapshots(loadState()));
   }, [hydrated]);
 
+  // saveState also refreshes the current month's snapshot from live definitions.
   useEffect(() => {
     if (!hydrated || !state) return;
     saveState(state);
   }, [hydrated, state]);
 
-  // Reset unlock whenever the user navigates months
-  useEffect(() => {
-    setIsUnlocked(false);
-  }, [month]);
-
   const cmk = currentMonthKey();
   const isPastMonth = month < cmk;
   const firstMonthKey = state?.meta.createdAt ? state.meta.createdAt.slice(0, 7) : cmk;
   const lockedMonth: LockedMonth | null = state?.lockedMonths.find((lm) => lm.monthKey === month) ?? null;
-  const isArchived = !!lockedMonth;
-  const isReadOnly = (isPastMonth || isArchived) && !isUnlocked;
 
-  // Use the archived snapshot's data when the month is locked, else live state
-  const stateForMonth = useMemo((): BudgetState | null => {
-    if (!state) return null;
-    if (isArchived && !isUnlocked && lockedMonth) {
-      return {
-        ...state,
-        incomes: lockedMonth.incomes,
-        recurringExpenses: lockedMonth.recurringExpenses,
-        budgetCategories: lockedMonth.budgetCategories,
-        goals: lockedMonth.goals,
-      };
-    }
-    return state;
-  }, [state, isArchived, isUnlocked, lockedMonth]);
+  // Past months render their snapshot's definitions with live facts; everything else is live.
+  const viewState = useMemo((): BudgetState | null => (state ? viewStateForMonth(state, month, cmk) : null), [state, month, cmk]);
 
-  // Paycheck-based periods replace the old fixed-half periods
-  const periods = useMemo(() => (stateForMonth ? paycheckPeriodsForMonth(stateForMonth, month) : []), [stateForMonth, month]);
+  const periods = useMemo(() => (viewState ? paycheckPeriodsForMonth(viewState, month) : []), [viewState, month]);
 
   const totals = useMemo(
     () =>
@@ -449,20 +488,42 @@ export default function Home() {
 
   const { lastDay, year, monthIndex } = useMemo(() => monthBounds(month), [month]);
 
-  // Build timeline events from the period data so paid status is consistent
+  const today = new Date();
+  const todayIsThisMonth = today.getFullYear() === year && today.getMonth() === monthIndex;
+  const todayDay = todayIsThisMonth ? today.getDate() : null;
+
+  // The period that contains today: a period of the current month, or the previous
+  // month's last period while it still overhangs into this month's first payday.
+  const orderedPeriods = useMemo(() => {
+    if (!viewState) return [] as { period: PaycheckPeriod; isCurrent: boolean }[];
+    const day = today.getDate();
+    const firstPaydayThisMonth = Math.min(
+      Infinity,
+      ...viewState.incomes.flatMap((inc) => incomeDatesForMonth(inc, cmk).map((d) => d.getDate())),
+    );
+    const isCurrent = (p: PaycheckPeriod) => {
+      if (month === cmk) return p.startDay <= day && day <= p.endDay;
+      if (month === shiftMonth(cmk, -1) && p.index === p.total) return day < firstPaydayThisMonth;
+      return false;
+    };
+    return periods
+      .map((period) => ({ period, isCurrent: isCurrent(period) }))
+      .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periods, viewState, month, cmk, today.getDate()]);
+
+  // Timeline events from the period data so paid status is consistent
   const events = useMemo(() => {
-    if (!stateForMonth) return [];
+    if (!viewState) return [];
     const evts: { kind: string; day: number; label: string; tooltip: string }[] = [];
-    // Income events
-    stateForMonth.incomes.forEach((inc) => {
+    viewState.incomes.forEach((inc) => {
       incomeDatesForMonth(inc, month).forEach((d) => {
         evts.push({ kind: "income", day: d.getDate(), label: moneyFmt(inc.amount), tooltip: inc.name });
       });
     });
-    // Bill events — paid status from the period data
     const billPaid = new Map<string, boolean>();
     periods.forEach((p) => p.bills.forEach((b) => billPaid.set(b.expenseId, b.paid)));
-    stateForMonth.recurringExpenses.forEach((exp) => {
+    viewState.recurringExpenses.forEach((exp) => {
       const due = recurringDueDate(exp, month);
       if (!due) return;
       const paid = billPaid.get(exp.id) ?? false;
@@ -470,7 +531,7 @@ export default function Home() {
       evts.push({ kind: paid ? "paid" : "bill", day: due.getDate(), label: moneyFmt(amt), tooltip: exp.name });
     });
     return evts;
-  }, [stateForMonth, month, periods]);
+  }, [viewState, month, periods]);
 
   const dayBalances = useMemo(() => {
     let running = 0;
@@ -519,246 +580,247 @@ export default function Home() {
     });
   }
 
-  function archiveMonth() {
-    setState((s) => {
-      if (!s) return s;
-      const snapshot: LockedMonth = {
-        monthKey: month,
-        lockedAt: new Date().toISOString(),
-        incomes: structuredClone(s.incomes),
-        recurringExpenses: structuredClone(s.recurringExpenses),
-        budgetCategories: structuredClone(s.budgetCategories),
-        goals: structuredClone(s.goals),
-      };
-      const rest = s.lockedMonths.filter((lm) => lm.monthKey !== month);
-      return { ...s, lockedMonths: [...rest, snapshot] };
-    });
+  function refreshSnapshot() {
+    setState((s) => (s ? upsertSnapshot(s, month) : s));
+    setRefreshOpen(false);
   }
 
-  const today = new Date();
-  const todayIsThisMonth = today.getFullYear() === year && today.getMonth() === monthIndex;
-  const todayDay = todayIsThisMonth ? today.getDate() : null;
+  function dismiss(id: HintId) {
+    setState((s) => (s ? dismissHint(s, id) : s));
+  }
 
-  if (!hydrated || !state || !stateForMonth) {
+  function addIncome(): boolean {
+    const errs = sourceDraftErrors(sourceDraft);
+    if (errs.name || errs.amount || errs.date) {
+      setSourceAttempted(true);
+      return false;
+    }
+    const income = incomeFromDraft(sourceDraft, errs);
+    setState((s) => (s ? { ...s, incomes: [...s.incomes, income] } : s));
+    setSourceDraft(emptySourceDraft());
+    setSourceAttempted(false);
+    return true;
+  }
+
+  function addBill(): boolean {
+    const errs = billDraftErrors(billDraft);
+    if (errs.name || errs.amount) {
+      setBillAttempted(true);
+      return false;
+    }
+    const expense = expenseFromDraft(billDraft, errs);
+    setState((s) => (s ? { ...s, recurringExpenses: [...s.recurringExpenses, expense] } : s));
+    setBillDraft(emptyBillDraft);
+    setBillAttempted(false);
+    return true;
+  }
+
+  function loadSample() {
+    saveState(sampleData());
+    window.location.reload();
+  }
+
+  if (!hydrated || !state || !viewState) {
     return (
       <section className="container" aria-busy="true">
-        <header className="sheet page-head">
-          <p className="kicker">Overview</p>
-          <h1 className="page-head__title">Paycheck periods</h1>
-          <p className="page-head__lead">Loading the current ledger…</p>
-        </header>
-        <div className="stat-row" aria-hidden="true">
-          {[0, 1, 2].map((i) => (
-            <article key={i} className="sheet stat" style={{ padding: "16px 22px 18px" }}>
-              <span className="skeleton skeleton--line" style={{ width: 90 }} />
-              <div style={{ marginTop: 8 }}>
-                <span className="skeleton skeleton--line" style={{ height: 26, width: 140 }} />
+        <div className="sheet sheet--bar month-head">
+          <div className="month-head__title">
+            <h1 className="month-head__label">Paycheck periods</h1>
+          </div>
+          <p className="muted month-head__loading">Loading…</p>
+        </div>
+        <div className="sheet month-summary" aria-hidden="true">
+          <span className="skeleton skeleton--line" />
+        </div>
+        <div className="period-grid" aria-hidden="true">
+          {[0, 1].map((i) => (
+            <div key={i} className="sheet period-card">
+              <span className="skeleton skeleton--line skeleton--stat-label" />
+              <div className="skeleton-gap">
+                <span className="skeleton skeleton--line skeleton--stat-value" />
               </div>
-            </article>
+              <div className="skeleton skeleton--row" />
+              <div className="skeleton skeleton--row" />
+            </div>
           ))}
         </div>
       </section>
     );
   }
 
-  const hasNoData =
-    state.incomes.length === 0 && state.recurringExpenses.length === 0;
+  const hasIncome = state.incomes.length > 0;
+  const hasBills = state.recurringExpenses.length > 0;
+  const showGoalsHint = hasBills && state.goals.length === 0;
+  const monthLabel = formatMonthLabel(month);
 
-  if (hasNoData) {
-    return (
-      <section className="container">
-        <header className="sheet page-head">
-          <p className="kicker">Overview</p>
-          <h1 className="page-head__title">Paycheck periods</h1>
-          <p className="page-head__lead">
-            Your ledger is blank. Add an income source to see paychecks, bills, and what's left over.
-          </p>
-        </header>
-        <div className="sheet empty-state">
-          <p className="kicker">Get started</p>
-          <h2 className="section-title">Three steps to your first ledger</h2>
-          <ol className="empty-state__steps">
-            <li>
-              <span className="empty-state__num">1</span>
-              <div>
-                <strong>Add your paycheck.</strong>
-                <p className="muted">Tell the ledger when and how much you get paid.</p>
-              </div>
-            </li>
-            <li>
-              <span className="empty-state__num">2</span>
-              <div>
-                <strong>Log recurring bills.</strong>
-                <p className="muted">Rent, utilities, subscriptions — anything that returns each month.</p>
-              </div>
-            </li>
-            <li>
-              <span className="empty-state__num">3</span>
-              <div>
-                <strong>Plan the leftover.</strong>
-                <p className="muted">Set budget categories so every spare dollar has a job.</p>
-              </div>
-            </li>
-          </ol>
-          <div className="empty-state__actions">
-            <Link href="/income" className="btn btn--lg">Add your first income</Link>
-            <Link href="/expenses" className="btn btn--ghost">Skip to bills</Link>
-          </div>
-        </div>
-      </section>
-    );
-  }
+  const firstRunBody = (
+    <div className="period-empty">
+      <p className="period-empty__text">
+        Bursar splits each month by your paydays. Add your first income to see your periods.
+      </p>
+      <div>
+        <button type="button" className="btn btn--lg" onClick={() => setDialog("source")}>
+          Add income
+        </button>
+      </div>
+      <div className="period-empty__links">
+        <ImportLedgerButton className="text-link-btn" onStatus={setImportStatus}>Import a backup file</ImportLedgerButton>
+        <button type="button" className="text-link-btn" onClick={loadSample}>Try it with sample data</button>
+      </div>
+      {importStatus && <p className="muted" role="status">{importStatus}</p>}
+    </div>
+  );
+
+  const billsEmptyBody = (
+    <div className="period-empty">
+      <p className="period-empty__text">No bills yet. Add the bills this paycheck needs to cover.</p>
+      <div>
+        <button type="button" className="btn" onClick={() => setDialog("bill")}>
+          Add bill
+        </button>
+      </div>
+    </div>
+  );
+
+  // Quick-add row at the bottom of the Income / Bills tabs — opens the same dialog / sheet.
+  const quickAdd = (kind: "source" | "bill") => (
+    <div className="period-card__quick-add">
+      <button type="button" className="text-link-btn" onClick={() => setDialog(kind)}>
+        <IconPlus size={14} aria-hidden="true" />
+        {kind === "source" ? "Add income" : "Add bill"}
+      </button>
+    </div>
+  );
 
   return (
     <section className="container">
-      {/* Page head */}
-      <header className="sheet page-head">
-        <p className="kicker">Overview</p>
-        <h1 className="page-head__title">Paycheck periods</h1>
-        <p className="page-head__lead">
-          Each card represents a paycheck period — income that lands, bills due, and what's left over.
-        </p>
-      </header>
-
-      {/* Month picker */}
-      <div className="sheet" style={{ padding: "14px 22px 14px 22px" }}>
-        <div className="row-between">
-          <div>
-            <p className="kicker">Ledger month</p>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 32, lineHeight: 1.1, color: "var(--ink-1)" }}>
-                {formatMonthLabel(month)}
-              </div>
-              {isReadOnly && (
-                <span className="stamp" style={{ fontSize: 10, padding: "2px 7px", letterSpacing: "0.12em" }}>
-                  {isArchived ? (isPastMonth ? "Archived" : "Locked") : "Past"}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="month-controls">
-            <div className="month-controls__group">
-              <button className="btn btn--ghost" type="button" onClick={() => setMonth(shiftMonth(month, -1))} disabled={month <= firstMonthKey} aria-label="Previous month">‹ Prev</button>
-              <button className="btn btn--ghost" type="button" onClick={() => setMonth(currentMonthKey())}>Today</button>
-              <button className="btn btn--ghost" type="button" onClick={() => setMonth(shiftMonth(month, 1))} aria-label="Next month">Next ›</button>
-            </div>
-            <div className="month-controls__group">
-              {!isArchived && (
-                <button
-                  className="btn btn--ghost"
-                  type="button"
-                  onClick={archiveMonth}
-                  title={isPastMonth ? "Snapshot this month's data so it won't change with future edits" : "Freeze this month's data so future changes to income or expenses won't affect it"}
-                >
-                  {isPastMonth ? "Archive" : "Lock"}
-                </button>
-              )}
-              {isArchived && !isUnlocked && (
-                <button className="btn btn--ghost" type="button" onClick={() => setUnlockOpen(true)} title="Edit this month's underlying income or bills">
-                  Unlock
-                </button>
-              )}
-              {isArchived && isUnlocked && (
-                <button className="btn btn--ghost" type="button" onClick={() => setIsUnlocked(false)} title={isPastMonth ? "Return to archived snapshot" : "Return to locked snapshot"}>
-                  Re-lock
-                </button>
-              )}
-            </div>
-          </div>
+      {/* Month header */}
+      <div className="sheet sheet--bar month-head">
+        <div className="month-head__title">
+          <h1 className="month-head__label">{monthLabel}</h1>
+          {isPastMonth && lockedMonth && (
+            <span className="stamp stamp--sm">Snapshot · {formatShortDate(new Date(lockedMonth.lockedAt))}</span>
+          )}
         </div>
-        {!isPastMonth && !isArchived && (
-          <p className="muted" style={{ marginTop: 8, fontStyle: "italic", fontSize: 13 }}>
-            Lock this month to freeze its data — future edits to income, expenses, or budget categories won't affect it.
-          </p>
-        )}
-        {isArchived && isUnlocked && (
-          <p className="muted" style={{ marginTop: 8, fontStyle: "italic", fontSize: 13 }}>
-            Unlocked — edits here update your live income, bills, and budget for every unlocked month. Re-lock to restore the {isPastMonth ? "archived" : "locked"} snapshot.
-          </p>
-        )}
+        <div className="month-head__controls">
+          <button className="btn btn--ghost" type="button" onClick={() => setMonth(shiftMonth(month, -1))} disabled={month <= firstMonthKey} aria-label="Previous month">‹ Prev</button>
+          <button className="btn btn--ghost" type="button" onClick={() => setMonth(currentMonthKey())}>Today</button>
+          <button className="btn btn--ghost" type="button" onClick={() => setMonth(shiftMonth(month, 1))} aria-label="Next month">Next ›</button>
+          {isPastMonth && (
+            <OverflowMenu
+              label={`More actions for ${monthLabel}`}
+              items={[{ label: "Refresh from current data", onSelect: () => setRefreshOpen(true) }]}
+            />
+          )}
+        </div>
       </div>
 
-      <ConfirmDialog
-        open={unlockOpen}
-        title="Unlock this month?"
-        body={
-          <>
-            <p>
-              You're about to edit a {isPastMonth ? "past, archived" : "locked"} month using live data.
-            </p>
-            <p>
-              Changes to income sources, bills, or budget categories aren't scoped to this month — they apply to your live ledger, which affects every unlocked month, including future ones.
-            </p>
-          </>
-        }
-        confirmLabel="Unlock & edit live"
-        cancelLabel="Keep locked"
-        onConfirm={() => {
-          setIsUnlocked(true);
-          setUnlockOpen(false);
-        }}
-        onCancel={() => setUnlockOpen(false)}
-      />
-
-      {/* Month stats row */}
-      <div className="stat-row">
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
-          <div className="stat__label">Total income</div>
-          <div className="stat__value">{moneyFmt(totals.income)}</div>
-        </article>
-        <article className="sheet stat" style={{ padding: "16px 22px 18px" }}>
-          <div className="stat__label">Total bills due</div>
-          <div className="stat__value">{moneyFmt(totals.bills)}</div>
-        </article>
-        <article className="sheet stat stat--accent" style={{ padding: "16px 22px 18px" }}>
-          <div className="stat__label">Month leftover</div>
-          <div className={`stat__value${totals.leftover < 0 ? " stat__value--neg" : ""}`}>{moneyFmt(totals.leftover)}</div>
-        </article>
-      </div>
-
-      {/* Cash-flow timeline */}
-      <div className="sheet" style={{ padding: "20px 28px 24px" }}>
-        <div className="row-between mb-3">
-          <div>
-            <p className="kicker">Cash-flow timeline</p>
-            <h2 className="section-title">{formatMonthLabel(month)}</h2>
-          </div>
-          <div className="timeline__legend" style={{ marginTop: 0 }}>
-            <span><span className="timeline__legend-dot" style={{ background: "var(--ink-1)" }} />Income</span>
-            <span>
-              <span className="timeline__legend-dot" style={{ background: "var(--paper-1)", border: "2px solid var(--signal-red)", display: "inline-block" }} />
-              Bill due
+      {/* Month summary */}
+      <div className="sheet month-summary">
+        <div className="month-summary__line">
+          <span className="month-summary__caption">Month total</span>
+          <span className="month-summary__equation">
+          <span className="month-summary__term">
+            <span className="month-summary__label">Income</span>
+            <span className="month-summary__value">{moneyFmt(totals.income)}</span>
+          </span>
+          <span className="month-summary__op">−</span>
+          <span className="month-summary__term">
+            <span className="month-summary__label">Bills</span>
+            <span className="month-summary__value">{moneyFmt(totals.bills)}</span>
+          </span>
+          <span className="month-summary__op">=</span>
+          <span className="month-summary__term month-summary__term--total">
+            <span className="month-summary__label">Leftover</span>
+            <span className={`month-summary__value month-summary__value--total${totals.leftover < 0 ? " month-summary__value--neg" : ""}`}>
+              {moneyFmt(totals.leftover)}
             </span>
-            <span><span className="timeline__legend-dot" style={{ background: "rgba(47,106,74,0.6)" }} />Paid</span>
-          </div>
-        </div>
-        <Timeline events={events} lastDay={lastDay} todayDay={todayDay} />
-        <div className="divider" />
-        <div className="row-between">
-          <div>
-            <span className="page-head__meta-label">End-of-month balance</span>
-            <div style={{ fontFamily: "var(--font-numerals)", fontSize: 22, marginTop: 2, color: "var(--ink-1)" }}>
-              {moneyFmt(dayBalances[dayBalances.length - 1] ?? 0)}
-            </div>
-          </div>
-          <Sparkline values={dayBalances.length ? dayBalances : [0, 0]} width={220} height={32} />
+          </span>
+          </span>
         </div>
       </div>
 
-      {/* Paycheck period cards — one per paycheck date */}
+      {/* Paycheck period cards — the one containing today comes first */}
       <div className="period-grid">
-        {periods.map((p) => (
+        {orderedPeriods.map(({ period, isCurrent }, i) => (
           <PeriodCard
-            key={p.key}
-            period={p}
-            budgetCategories={stateForMonth.budgetCategories}
-            goals={stateForMonth.goals}
+            key={period.key}
+            period={period}
+            budgetCategories={viewState.budgetCategories}
+            goals={viewState.goals}
+            hasIncome={hasIncome}
+            hasBills={hasBills}
+            isCurrent={isCurrent}
             onTogglePaid={togglePaid}
             onToggleGoalPeriod={toggleGoalPeriod}
-            readOnly={isReadOnly}
+            body={!hasIncome && i === 0 ? firstRunBody : undefined}
+            billsEmptyState={hasIncome && !hasBills ? billsEmptyBody : undefined}
+            incomeAddon={hasIncome ? quickAdd("source") : undefined}
+            billsAddon={hasBills ? quickAdd("bill") : undefined}
+            hint={i === 0 && showGoalsHint ? <Hint id="overview-goals" hints={state.meta.hints} onDismiss={dismiss} /> : undefined}
           />
         ))}
       </div>
+
+      {/* Cash-flow timeline — open on desktop, collapsed on mobile */}
+      <details className="sheet timeline-details" open={!isMobile}>
+        <summary className="timeline-details__summary">
+          <span className="timeline-details__heading">
+            <span className="kicker">Cash-flow timeline</span>
+            <span className="timeline-details__title">{monthLabel}</span>
+          </span>
+          <IconChevronDown className="timeline-details__chevron" size={18} aria-hidden="true" />
+        </summary>
+        <div className="timeline-details__body">
+          <div className="timeline__legend timeline__legend--inline">
+            <span><span className="timeline__legend-dot timeline__legend-dot--income" />Income</span>
+            <span><span className="timeline__legend-dot timeline__legend-dot--bill" />Bill due</span>
+            <span><span className="timeline__legend-dot timeline__legend-dot--paid" />Paid</span>
+          </div>
+          <Timeline events={events} lastDay={lastDay} todayDay={todayDay} />
+          <div className="divider" />
+          <div className="row-between">
+            <div>
+              <span className="page-head__meta-label">End-of-month balance</span>
+              <div className="timeline__balance">
+                {moneyFmt(dayBalances[dayBalances.length - 1] ?? 0)}
+              </div>
+            </div>
+            <Sparkline values={dayBalances.length ? dayBalances : [0, 0]} width={220} height={32} />
+          </div>
+        </div>
+      </details>
+
+      <ConfirmDialog
+        open={refreshOpen}
+        title={`Refresh ${monthLabel} from current data?`}
+        body={`This replaces ${monthLabel}’s saved income, bills, and budget with your current ones. Paid marks and goal contributions are not affected.`}
+        confirmLabel="Refresh"
+        cancelLabel="Keep snapshot"
+        onConfirm={refreshSnapshot}
+        onCancel={() => setRefreshOpen(false)}
+      />
+
+      {/* Add income / add bill — centered dialog on desktop, bottom sheet on mobile; closes only on a successful add */}
+      <FormDialog open={dialog === "source"} title="Add income" onClose={() => setDialog(null)}>
+        <AddSourceForm
+          inSheet
+          draft={sourceDraft}
+          setDraft={setSourceDraft}
+          onAdd={() => { if (addIncome()) setDialog(null); }}
+          attempted={sourceAttempted}
+        />
+      </FormDialog>
+      <FormDialog open={dialog === "bill"} title="Add bill" onClose={() => setDialog(null)}>
+        <AddBillForm
+          inSheet
+          combinedDue
+          draft={billDraft}
+          setDraft={setBillDraft}
+          onAdd={() => { if (addBill()) setDialog(null); }}
+          attempted={billAttempted}
+        />
+      </FormDialog>
     </section>
   );
 }

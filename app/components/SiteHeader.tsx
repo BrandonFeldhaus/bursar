@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { DemoBanner } from "./DemoBanner";
 
 export function SiteHeader() {
   const pathname = usePathname();
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname?.startsWith(href));
-  const isOnboarding = pathname === "/onboarding";
 
   return (
     <header className="siteHeader">
@@ -15,34 +15,34 @@ export function SiteHeader() {
       </a>
 
       <div className="headerInner">
-        <Link className="brand" href={isOnboarding ? "/onboarding" : "/"} aria-label="Home">
+        <Link className="brand" href="/" aria-label="Home">
           <span className="brandMark" aria-hidden="true" />
           <span className="brandText">Bursar</span>
         </Link>
 
-        {!isOnboarding && (
-          <nav className="topNav" aria-label="Primary">
-            <Link className={`topNavLink ${isActive("/") ? "isActive" : ""}`} href="/">
-              Overview
-            </Link>
-            <Link className={`topNavLink ${isActive("/expenses") ? "isActive" : ""}`} href="/expenses">
-              Expenses
-            </Link>
-            <Link className={`topNavLink ${isActive("/budget") ? "isActive" : ""}`} href="/budget">
-              Budget
-            </Link>
-            <Link className={`topNavLink ${isActive("/goals") ? "isActive" : ""}`} href="/goals">
-              Goals
-            </Link>
-            <Link className={`topNavLink ${isActive("/income") ? "isActive" : ""}`} href="/income">
-              Income
-            </Link>
-            <Link className={`topNavLink ${isActive("/settings") ? "isActive" : ""}`} href="/settings">
-              Settings
-            </Link>
-          </nav>
-        )}
+        <nav className="topNav" aria-label="Primary">
+          <Link className={`topNavLink ${isActive("/") ? "isActive" : ""}`} href="/">
+            Overview
+          </Link>
+          <Link className={`topNavLink ${isActive("/expenses") ? "isActive" : ""}`} href="/expenses">
+            Expenses
+          </Link>
+          <Link className={`topNavLink ${isActive("/budget") ? "isActive" : ""}`} href="/budget">
+            Budget
+          </Link>
+          <Link className={`topNavLink ${isActive("/goals") ? "isActive" : ""}`} href="/goals">
+            Goals
+          </Link>
+          <Link className={`topNavLink ${isActive("/income") ? "isActive" : ""}`} href="/income">
+            Income
+          </Link>
+          <Link className={`topNavLink ${isActive("/settings") ? "isActive" : ""}`} href="/settings">
+            Settings
+          </Link>
+        </nav>
       </div>
+
+      <DemoBanner />
     </header>
   );
 }

@@ -1,27 +1,37 @@
 "use client";
 
-import { type Dispatch, type SetStateAction, Fragment, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type Dispatch, type SetStateAction, Fragment, useEffect, useMemo, useState } from "react";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { loadState, newId, saveState, type BudgetState, type Goal } from "../lib/storage";
 import { useHydrated } from "../lib/useHydrated";
 import { useIsMobile } from "../lib/useIsMobile";
 import { moneyFmt } from "../lib/currency";
+import { computeAllocations } from "../lib/allocations";
+import {
+  currentPeriod,
+  fundingCandidates,
+  goalFundingSources,
+  paychecksToGo,
+  type FundingSource,
+} from "../lib/goalFunding";
 import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator";
 import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { BottomSheet } from "../components/BottomSheet";
-import { AddGoalForm, emptyGoalDraft, type DraftGoal } from "../components/AddGoalForm";
-import { jumpToAddForm } from "../lib/jumpToAddForm";
+import { FormDialog } from "../components/FormDialog";
+import { FundingPicker } from "../components/FundingPicker";
+import { AddGoalForm, emptyGoalDraft, goalDraftErrors, goalFromDraft, type DraftGoal } from "../components/AddGoalForm";
 import { toISODate } from "../lib/month";
 import { formatAdjustmentDate, sortAdjustmentsForDisplay } from "../lib/goalAdjustments";
+import { Hint, dismissHint, type HintId } from "../components/Hint";
 
 const RECENT_ADJ_COUNT = 3;
 
 function GoalProgressBar({ pct, type }: { pct: number; type: "savings" | "debt" }) {
   const clamped = Math.min(100, Math.max(0, pct));
-  const color = clamped >= 100 ? "#2f6a4a" : type === "debt" ? "var(--signal-red)" : "var(--ink-1)";
+  const tone = clamped >= 100 ? " goal-progress-bar__fill--done" : type === "debt" ? " goal-progress-bar__fill--debt" : "";
   return (
     <div className="goal-progress-bar">
-      <div className="goal-progress-bar__fill" style={{ width: `${clamped}%`, background: color }} />
+      <div className={`goal-progress-bar__fill${tone}`} style={{ "--pct": `${clamped}%` } as CSSProperties} />
     </div>
   );
 }
@@ -39,10 +49,25 @@ function parseAdjAmount(raw: string): number {
 
 type AdjSign = 1 | -1;
 
+/** Names of the goal's funding sources, for the badges in the cards and the table. */
+function FundingBadges({ goal, candidates }: { goal: Goal; candidates: FundingSource[] }) {
+  const sources = goalFundingSources(goal, candidates);
+  return (
+    <div className="goal-links">
+      {sources.length === 0
+        ? <span className="goal-links__none">Not funded</span>
+        : sources.map((s) => <span key={`${s.kind}:${s.id}`} className="badge badge--sm">{s.name}</span>)}
+    </div>
+  );
+}
+
+/**
+ * Expanded editor for one goal — an inline table row on desktop, the bottom sheet on
+ * mobile. Two stacked sections: "Funded by" (chips + picker) and "Adjustments".
+ */
 function GoalEditor({
   goal,
-  budgetCategories,
-  recurringExpenses,
+  candidates,
   onUpdate,
   adjAmount,
   setAdjAmount,
@@ -54,11 +79,9 @@ function GoalEditor({
   onRemoveAdjustment,
   showAllAdj,
   onToggleShowAllAdj,
-  inSheet,
 }: {
   goal: Goal;
-  budgetCategories: { id: string; name: string }[];
-  recurringExpenses: { id: string; name: string }[];
+  candidates: FundingSource[];
   onUpdate: (patch: Partial<Goal>) => void;
   adjAmount: string;
   setAdjAmount: Dispatch<SetStateAction<string>>;
@@ -70,172 +93,183 @@ function GoalEditor({
   onRemoveAdjustment: (adjId: string) => void;
   showAllAdj: boolean;
   onToggleShowAllAdj: () => void;
-  inSheet?: boolean;
 }) {
+  const sources = goalFundingSources(goal, candidates);
+  const perPaycheck = sources.reduce((s, x) => s + x.amount, 0);
+  const remaining = Math.max(0, goal.targetAmount - goalTotalApplied(goal));
+  const toGo = paychecksToGo(remaining, perPaycheck);
+
+  const isAdded = (s: FundingSource) =>
+    s.kind === "category" ? goal.linkedBudgetCategoryIds.includes(s.id) : goal.linkedExpenseIds.includes(s.id);
+
+  function addSource(s: FundingSource) {
+    if (isAdded(s)) return;
+    if (s.kind === "category") onUpdate({ linkedBudgetCategoryIds: [...goal.linkedBudgetCategoryIds, s.id] });
+    else onUpdate({ linkedExpenseIds: [...goal.linkedExpenseIds, s.id] });
+  }
+
+  function removeSource(s: FundingSource) {
+    if (s.kind === "category") onUpdate({ linkedBudgetCategoryIds: goal.linkedBudgetCategoryIds.filter((id) => id !== s.id) });
+    else onUpdate({ linkedExpenseIds: goal.linkedExpenseIds.filter((id) => id !== s.id) });
+  }
+
   const sortedAdj = sortAdjustmentsForDisplay(goal.manualAdjustments);
   const visibleAdj = showAllAdj ? sortedAdj : sortedAdj.slice(0, RECENT_ADJ_COUNT);
+
   return (
-    <>
-      {/* Links section */}
-      <p className="kicker" style={{ marginBottom: 8 }}>{inSheet ? "Links" : `Links — ${goal.name}`}</p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 20px", marginBottom: 16 }}>
-        {budgetCategories.length === 0 && recurringExpenses.length === 0 && (
-          <span style={{ fontSize: 12, color: "var(--ink-4)", fontStyle: "italic" }}>No budget categories or bills set up yet.</span>
-        )}
-        {budgetCategories.map((c) => {
-          const checked = goal.linkedBudgetCategoryIds.includes(c.id);
-          return (
-            <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() =>
-                  onUpdate({
-                    linkedBudgetCategoryIds: checked
-                      ? goal.linkedBudgetCategoryIds.filter((id) => id !== c.id)
-                      : [...goal.linkedBudgetCategoryIds, c.id],
-                  })
-                }
-                style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
-              />
-              {c.name}
-            </label>
-          );
-        })}
-        {recurringExpenses.map((e) => {
-          const checked = goal.linkedExpenseIds.includes(e.id);
-          return (
-            <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer", userSelect: "none" }}>
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() =>
-                  onUpdate({
-                    linkedExpenseIds: checked
-                      ? goal.linkedExpenseIds.filter((id) => id !== e.id)
-                      : [...goal.linkedExpenseIds, e.id],
-                  })
-                }
-                style={{ accentColor: "var(--ink-1)", flexShrink: 0 }}
-              />
-              {e.name}
-            </label>
-          );
-        })}
-      </div>
-      {/* Adjustments section */}
-      <p className="kicker" style={{ marginBottom: 8 }}>Adjustments</p>
-      {sortedAdj.length > 0 ? (
-        <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: sortedAdj.length > RECENT_ADJ_COUNT ? 6 : 12, ...(showAllAdj ? { maxHeight: 180, overflowY: "auto" } : {}) }}>
-            {visibleAdj.map((a) => (
-              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-                <span style={{ color: "var(--ink-4)", fontSize: 12, minWidth: 52, flexShrink: 0 }}>
-                  {a.date ? formatAdjustmentDate(a.date) : "—"}
-                </span>
-                <span style={{ fontFamily: "var(--font-numerals)", minWidth: 90, color: a.amount < 0 ? "var(--signal-red)" : "var(--ink-1)" }}>
-                  {a.amount > 0 ? "+" : ""}{moneyFmt(a.amount)}
-                </span>
-                {a.note
-                  ? <span style={{ color: "var(--ink-3)", fontStyle: "italic" }}>{a.note}</span>
-                  : <span style={{ color: "var(--ink-4)", fontStyle: "italic" }}>—</span>
-                }
+    <div className="goal-editor">
+      <section className="goal-editor__section">
+        <h4 className="goal-editor__heading">Funded by</h4>
+        <p className="goal-editor__explainer">When you tick this goal on a paycheck period, these amounts count toward it.</p>
+
+        {sources.length > 0 ? (
+          <ul className="funding-chips">
+            {sources.map((s) => (
+              <li key={`${s.kind}:${s.id}`} className="funding-chip">
+                <span className="funding-chip__name">{s.name}</span>
+                <span className="funding-chip__amount">{moneyFmt(s.amount)}</span>
                 <button
-                  className="btn btn--icon"
                   type="button"
-                  style={{ marginLeft: "auto", flexShrink: 0 }}
-                  onClick={() => onRemoveAdjustment(a.id)}
-                  aria-label="Remove adjustment"
+                  className="funding-chip__remove"
+                  aria-label={`Remove ${s.name}`}
+                  onClick={() => removeSource(s)}
                 >
-                  <IconX size={16} aria-hidden="true" />
+                  <IconX size={14} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="goal-editor__none">Not funded yet.</p>
+        )}
+
+        {perPaycheck > 0 && (
+          <p className="funding-total">
+            <span className="funding-total__amount">≈ {moneyFmt(perPaycheck)} per paycheck</span>
+            {toGo !== null && (
+              <span className="funding-total__estimate">about {toGo} {toGo === 1 ? "paycheck" : "paychecks"} to go</span>
+            )}
+          </p>
+        )}
+
+        {candidates.length > 0 ? (
+          <FundingPicker goalType={goal.type} candidates={candidates} isAdded={isAdded} onAdd={addSource} />
+        ) : (
+          <p className="goal-editor__none">Add budget categories or bills first, then fund this goal from them.</p>
+        )}
+      </section>
+
+      <div className="goal-editor__divider" role="presentation" />
+
+      <section className="goal-editor__section">
+        <h4 className="goal-editor__heading">Adjustments</h4>
+        <p className="goal-editor__explainer">Money added or taken out that did not come from a paycheck period.</p>
+        {sortedAdj.length > 0 ? (
+          <>
+            <div className={`goal-editor__adj-list${sortedAdj.length > RECENT_ADJ_COUNT ? " goal-editor__adj-list--more" : ""}${showAllAdj ? " goal-editor__adj-list--scroll" : ""}`}>
+              {visibleAdj.map((a) => (
+                <div key={a.id} className="goal-editor__adj">
+                  <span className="goal-editor__adj-date">
+                    {a.date ? formatAdjustmentDate(a.date) : "—"}
+                  </span>
+                  <span className={`goal-editor__adj-amount${a.amount < 0 ? " goal-editor__adj-amount--neg" : ""}`}>
+                    {a.amount > 0 ? "+" : ""}{moneyFmt(a.amount)}
+                  </span>
+                  {a.note
+                    ? <span className="goal-editor__adj-note">{a.note}</span>
+                    : <span className="goal-editor__adj-note goal-editor__adj-note--empty">—</span>
+                  }
+                  <button
+                    className="btn btn--icon goal-editor__adj-remove"
+                    type="button"
+                    onClick={() => onRemoveAdjustment(a.id)}
+                    aria-label="Remove adjustment"
+                  >
+                    <IconX size={16} aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {sortedAdj.length > RECENT_ADJ_COUNT && (
+              <button
+                className="btn btn--ghost goal-editor__toggle"
+                type="button"
+                onClick={onToggleShowAllAdj}
+              >
+                {showAllAdj ? "Show recent" : `Show all (${sortedAdj.length})`}
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="goal-editor__none">No adjustments yet.</p>
+        )}
+        <div className="inline-form inline-form--2col inline-form--bare">
+          <div className="field">
+            <label className="field__label" htmlFor={`adj-amount-${goal.id}`}>Amount</label>
+            <div className="goal-editor__amount-row">
+              <div className="segment segment--sign" role="radiogroup" aria-label="Add or subtract">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={adjSign === 1}
+                  aria-label="Add to goal"
+                  className={`segment__btn segment__btn--sign${adjSign === 1 ? " segment__btn--active" : ""}`}
+                  onClick={() => setAdjSign(1)}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={adjSign === -1}
+                  aria-label="Subtract from goal"
+                  className={`segment__btn segment__btn--sign${adjSign === -1 ? " segment__btn--active" : ""}`}
+                  onClick={() => setAdjSign(-1)}
+                >
+                  −
                 </button>
               </div>
-            ))}
-          </div>
-          {sortedAdj.length > RECENT_ADJ_COUNT && (
-            <button
-              className="btn btn--ghost"
-              type="button"
-              onClick={onToggleShowAllAdj}
-              style={{ fontSize: 12, padding: "2px 8px", marginBottom: 12 }}
-            >
-              {showAllAdj ? "Show recent" : `Show all (${sortedAdj.length})`}
-            </button>
-          )}
-        </>
-      ) : (
-        <p style={{ color: "var(--ink-4)", fontStyle: "italic", fontSize: 13, marginBottom: 10 }}>No manual adjustments yet.</p>
-      )}
-      <div
-        className="inline-form inline-form--2col"
-        style={{ padding: 0, background: "transparent", borderRadius: 0 }}
-      >
-        <div className="field">
-          <label className="field__label">Amount</label>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div className="segment" role="radiogroup" aria-label="Add or subtract" style={{ width: "auto", flex: "0 0 auto" }}>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={adjSign === 1}
-                aria-label="Add to goal"
-                className={`segment__btn${adjSign === 1 ? " segment__btn--active" : ""}`}
-                style={{ fontSize: 15, minWidth: 40, height: 32 }}
-                onClick={() => setAdjSign(1)}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={adjSign === -1}
-                aria-label="Subtract from goal"
-                className={`segment__btn${adjSign === -1 ? " segment__btn--active" : ""}`}
-                style={{ fontSize: 15, minWidth: 40, height: 32 }}
-                onClick={() => setAdjSign(-1)}
-              >
-                −
-              </button>
+              <input
+                id={`adj-amount-${goal.id}`}
+                className="input input--mono goal-editor__amount-input"
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9.]*"
+                placeholder="e.g. 500"
+                value={adjAmount}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (/[-−]/.test(raw)) setAdjSign(-1);
+                  else if (/\+/.test(raw)) setAdjSign(1);
+                  setAdjAmount(raw.replace(/[^0-9.]/g, ""));
+                }}
+                onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
+              />
             </div>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor={`adj-note-${goal.id}`}>Note (optional)</label>
             <input
-              className="input input--mono"
+              id={`adj-note-${goal.id}`}
+              className="input"
               type="text"
-              inputMode="decimal"
-              pattern="[0-9.]*"
-              placeholder="e.g. 500"
-              value={adjAmount}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (/[-−]/.test(raw)) setAdjSign(-1);
-                else if (/\+/.test(raw)) setAdjSign(1);
-                setAdjAmount(raw.replace(/[^0-9.]/g, ""));
-              }}
+              placeholder="e.g. Emergency withdrawal"
+              value={adjNote}
+              onChange={(e) => setAdjNote(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
-              style={{ flex: 1, minWidth: 0 }}
             />
           </div>
+          <button
+            className="btn"
+            type="button"
+            onClick={onAddAdjustment}
+            disabled={!adjAmount.trim() || isNaN(parseAdjAmount(adjAmount)) || parseAdjAmount(adjAmount) === 0}
+          >
+            Add adjustment
+          </button>
         </div>
-        <div className="field">
-          <label className="field__label">Note (optional)</label>
-          <input
-            className="input"
-            type="text"
-            placeholder="e.g. Emergency withdrawal"
-            value={adjNote}
-            onChange={(e) => setAdjNote(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
-          />
-        </div>
-        <button
-          className="btn"
-          type="button"
-          onClick={onAddAdjustment}
-          disabled={!adjAmount.trim() || isNaN(parseAdjAmount(adjAmount)) || parseAdjAmount(adjAmount) === 0}
-        >
-          Apply
-        </button>
-      </div>
-    </>
+      </section>
+    </div>
   );
 }
 
@@ -264,30 +298,33 @@ export default function GoalsPage() {
     saveState(state);
   }, [hydrated, state]);
 
+  /** Open (or close) a goal's editor with a clean adjustment form. */
+  function openEditor(id: string | null) {
+    setExpandedGoalId(id);
+    setAdjAmount("");
+    setAdjSign(1);
+    setAdjNote("");
+    setAdjShowAll(false);
+  }
+
   function addGoal(): boolean {
-    const name = draft.name.trim();
-    if (!name || draft.targetAmount <= 0) {
+    const errs = goalDraftErrors(draft);
+    if (errs.name || errs.target) {
       setAttempted(true);
       return false;
     }
-    setState((s) => {
-      if (!s) return s;
-      const newGoal: Goal = {
-        id: newId(),
-        name,
-        type: draft.type,
-        targetAmount: draft.targetAmount,
-        linkedBudgetCategoryIds: draft.linkedBudgetCategoryIds,
-        linkedExpenseIds: draft.linkedExpenseIds,
-        manualAdjustments: [],
-        appliedPeriods: [],
-      };
-      return { ...s, goals: [...s.goals, newGoal] };
-    });
+    const newGoal = goalFromDraft(draft);
+    setState((s) => (s ? { ...s, goals: [...s.goals, newGoal] } : s));
     setDraft(emptyGoalDraft);
     setAttempted(false);
     savedIndicator.flash();
+    // Straight into the editor so funding can be set right away.
+    openEditor(newGoal.id);
     return true;
+  }
+
+  function dismiss(id: HintId) {
+    setState((s) => (s ? dismissHint(s, id) : s));
   }
 
   function updateGoal(id: string, patch: Partial<Goal>) {
@@ -358,27 +395,24 @@ export default function GoalsPage() {
     savedIndicator.flash();
   }
 
-  const derived = useMemo(() => {
-    if (!state) return { totalApplied: 0, completed: 0 };
-    let totalApplied = 0;
-    let completed = 0;
-    for (const g of state.goals) {
-      const applied = goalTotalApplied(g);
-      totalApplied += applied;
-      if (applied >= g.targetAmount) completed++;
-    }
-    return { totalApplied, completed };
+  // What each category and bill comes to in the paycheck period that contains today —
+  // the amounts shown in the picker, the chips, and the per-paycheck total.
+  const candidates = useMemo((): FundingSource[] => {
+    if (!state) return [];
+    const period = currentPeriod(state);
+    if (!period) return [];
+    const allocations = computeAllocations(period.leftover, state.budgetCategories);
+    return fundingCandidates(allocations, period.bills, state.recurringExpenses);
   }, [state]);
 
   if (!hydrated || !state) {
     return (
       <section className="container" aria-busy="true">
         <header className="sheet page-head">
-          <p className="kicker">Goals</p>
-          <h1 className="page-head__title">Goals &amp; Targets</h1>
+          <h1 className="page-head__title">Goals</h1>
           <p className="page-head__lead">Loading goals…</p>
         </header>
-        <div className="sheet" style={{ padding: "20px 28px" }} aria-hidden="true">
+        <div className="sheet skeleton-card" aria-hidden="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="skeleton skeleton--row" />
           ))}
@@ -387,20 +421,38 @@ export default function GoalsPage() {
     );
   }
 
-  const { goals, budgetCategories, recurringExpenses } = state;
-  const { totalApplied, completed } = derived;
+  const { goals } = state;
   const expandedGoal = goals.find((g) => g.id === expandedGoalId) ?? null;
+
+  const editorFor = (g: Goal) => (
+    <GoalEditor
+      goal={g}
+      candidates={candidates}
+      onUpdate={(patch) => updateGoal(g.id, patch)}
+      adjAmount={adjAmount}
+      setAdjAmount={setAdjAmount}
+      adjSign={adjSign}
+      setAdjSign={setAdjSign}
+      adjNote={adjNote}
+      setAdjNote={setAdjNote}
+      onAddAdjustment={() => addManualAdjustment(g.id)}
+      onRemoveAdjustment={(adjId) => removeManualAdjustment(g.id, adjId)}
+      showAllAdj={adjShowAll}
+      onToggleShowAllAdj={() => setAdjShowAll((v) => !v)}
+    />
+  );
 
   return (
     <section className="container">
       {/* Page head */}
       <header className="sheet page-head">
-        <p className="kicker">Goals</p>
-        <h1 className="page-head__title">Goals &amp; Targets</h1>
+        <h1 className="page-head__title">Goals</h1>
         <p className="page-head__lead">
-          Track savings targets and debt payoff progress. Link a goal to multiple budget categories or recurring bills so the period widget can apply contributions each paycheck.
+          Track a savings target or a debt payoff. Fund a goal from budget categories or bills, then tick it on a paycheck period to add that amount.
         </p>
       </header>
+
+      <Hint id="goals" hints={state.meta.hints} onDismiss={dismiss} />
 
       {/* Progress cards */}
       {goals.length > 0 && (
@@ -409,21 +461,15 @@ export default function GoalsPage() {
             const applied = goalTotalApplied(g);
             const pct = g.targetAmount > 0 ? (applied / g.targetAmount) * 100 : 0;
             const remaining = Math.max(0, g.targetAmount - applied);
-            const linkedCats = g.linkedBudgetCategoryIds
-              .map((id) => budgetCategories.find((c) => c.id === id))
-              .filter(Boolean) as { id: string; name: string }[];
-            const linkedExps = g.linkedExpenseIds
-              .map((id) => recurringExpenses.find((e) => e.id === id))
-              .filter(Boolean) as { id: string; name: string }[];
 
             return (
               <div key={g.id} className="sheet goal-card">
                 <div className="goal-card__head">
-                  <div style={{ minWidth: 0 }}>
+                  <div className="goal-card__heading">
                     <p className="kicker">{g.type === "savings" ? "Savings" : "Debt payoff"}</p>
                     <h3 className="goal-card__title">{g.name}</h3>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <div className="goal-card__actions">
                     {pct >= 100 && <span className="stamp stamp--paid">Done</span>}
                     <button
                       className="btn btn--icon"
@@ -444,24 +490,16 @@ export default function GoalsPage() {
                     <span className="goal-card__amount">{moneyFmt(applied)}</span>
                   </span>
                   <span className="goal-card__pct">{pct.toFixed(0)}%</span>
-                  <span style={{ textAlign: "right" }}>
+                  <span className="goal-card__target">
                     <span className="goal-card__amount-label">Target</span>
                     <span className="goal-card__amount">{moneyFmt(g.targetAmount)}</span>
                   </span>
                 </div>
 
                 <div className="goal-card__footer">
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {linkedCats.length === 0 && linkedExps.length === 0
-                      ? <span className="badge" style={{ fontSize: 10, opacity: 0.5 }}>No link</span>
-                      : <>
-                          {linkedCats.map((c) => <span key={`cat:${c.id}`} className="badge" style={{ fontSize: 10 }}>{c.name}</span>)}
-                          {linkedExps.map((e) => <span key={`exp:${e.id}`} className="badge" style={{ fontSize: 10 }}>{e.name}</span>)}
-                        </>
-                    }
-                  </div>
+                  <FundingBadges goal={g} candidates={candidates} />
                   {remaining > 0 && (
-                    <span style={{ fontFamily: "var(--font-hand)", fontSize: 14, color: "var(--ink-3)" }}>
+                    <span className="goal-card__remaining">
                       {moneyFmt(remaining)} to go
                     </span>
                   )}
@@ -472,41 +510,28 @@ export default function GoalsPage() {
         </div>
       )}
 
-      {goals.length === 0 && (
-        <div className="sheet" style={{ padding: "28px 28px" }}>
-          <p className="kicker">No goals yet</p>
-          <p style={{ color: "var(--ink-3)", fontStyle: "italic", marginTop: 4 }}>
-            Add a savings or debt payoff goal below to start tracking your progress.
-          </p>
-        </div>
-      )}
-
       {/* Management table */}
       {goals.length > 0 && (
-        <div className="sheet" style={{ paddingTop: "20px", paddingBottom: 0 }}>
-          <div style={{ padding: "0 28px" }} className="row-between mb-3">
-            <div>
-              <p className="kicker">Manage</p>
+        <div className="sheet table-card">
+          <div className="table-card__head row-between mb-3">
+            <div className="table-card__title">
               <h2 className="section-title">All goals</h2>
+              <SavedIndicator visible={savedIndicator.visible} />
             </div>
-            <button
-              type="button"
-              className="btn mobile-only-inline btn--jump"
-              onClick={() => (isMobile ? setAddOpen(true) : jumpToAddForm())}
-            >
-              <IconPlus size={12} aria-hidden="true" />Add goal
+            <button type="button" className="btn btn--add" onClick={() => setAddOpen(true)}>
+              <IconPlus size={14} aria-hidden="true" />Add goal
             </button>
           </div>
-          <div className="ledger-table-wrap-no-line" style={{ borderRadius: "0 0 0 0" }}>
-            <table className="ledger-table ledger-table--responsive">
+          <div className="ledger-table-wrap-no-line ledger-table-wrap--flush">
+            <table className="ledger-table ledger-table--responsive ledger-table--goals">
               <thead>
                 <tr>
-                  <th style={{ width: "24%" }}>Goal</th>
-                  <th style={{ width: "9%" }}>Type</th>
-                  <th className="text-right" style={{ width: "11%" }}>Target</th>
-                  <th style={{ width: "10%" }}>Applied</th>
-                  <th style={{ width: "38%" }}>Linked to</th>
-                  <th className="text-tight" style={{ width: "8%" }} />
+                  <th>Goal</th>
+                  <th>Type</th>
+                  <th className="text-right">Target</th>
+                  <th>Applied</th>
+                  <th>Funded by</th>
+                  <th className="text-tight" />
                 </tr>
               </thead>
               <tbody>
@@ -521,6 +546,7 @@ export default function GoalsPage() {
                           <input
                             className="input"
                             value={g.name}
+                            aria-label="Goal name"
                             onChange={(e) => updateGoal(g.id, { name: e.target.value })}
                           />
                           <div className="goal-row-progress" aria-hidden="true">
@@ -535,6 +561,7 @@ export default function GoalsPage() {
                           <select
                             className="select"
                             value={g.type}
+                            aria-label="Goal type"
                             onChange={(e) => updateGoal(g.id, { type: e.target.value as "savings" | "debt" })}
                           >
                             <option value="savings">Savings</option>
@@ -548,6 +575,7 @@ export default function GoalsPage() {
                             inputMode="decimal"
                             pattern="[0-9.]*"
                             value={g.targetAmount || ""}
+                            aria-label="Target amount"
                             onChange={(e) =>
                               updateGoal(g.id, {
                                 targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0),
@@ -556,36 +584,18 @@ export default function GoalsPage() {
                           />
                         </td>
                         <td className="mono" data-label="Applied">{moneyFmt(applied)}</td>
-                        <td data-label="Linked to">
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                            {g.linkedBudgetCategoryIds.map((id) => {
-                              const cat = budgetCategories.find((c) => c.id === id);
-                              return cat ? <span key={id} className="badge" style={{ fontSize: 10 }}>{cat.name}</span> : null;
-                            })}
-                            {g.linkedExpenseIds.map((id) => {
-                              const exp = recurringExpenses.find((e) => e.id === id);
-                              return exp ? <span key={id} className="badge" style={{ fontSize: 10 }}>{exp.name}</span> : null;
-                            })}
-                            {g.linkedBudgetCategoryIds.length === 0 && g.linkedExpenseIds.length === 0 && (
-                              <span style={{ fontSize: 11, color: "var(--ink-4)", fontStyle: "italic" }}>None</span>
-                            )}
-                          </div>
+                        <td data-label="Funded by">
+                          <FundingBadges goal={g} candidates={candidates} />
                         </td>
-                        <td className="text-tight" style={{ verticalAlign: "middle" }}>
-                          <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <td className="text-tight">
+                          <div className="goal-row__actions">
                             <button
-                              className="btn btn--ghost"
+                              className={`btn btn--ghost goal-row__edit${isExpanded ? " goal-row__edit--active" : ""}`}
                               type="button"
-                              title="Edit links &amp; adjustments"
+                              title="Edit funding and adjustments"
                               aria-label={`Edit ${g.name}`}
-                              onClick={() => {
-                                setExpandedGoalId(isExpanded ? null : g.id);
-                                setAdjAmount("");
-                                setAdjSign(1);
-                                setAdjNote("");
-                                setAdjShowAll(false);
-                              }}
-                              style={{ fontSize: 11, padding: "2px 7px", fontWeight: 600, color: isExpanded ? "var(--ink-1)" : undefined }}
+                              aria-expanded={isExpanded}
+                              onClick={() => openEditor(isExpanded ? null : g.id)}
                             >
                               Edit
                             </button>
@@ -602,23 +612,8 @@ export default function GoalsPage() {
                       </tr>
                       {isExpanded && !isMobile && (
                         <tr>
-                          <td colSpan={6} style={{ background: "var(--surface-sunk)", padding: "14px 18px", borderTop: "1px dashed var(--border-soft)" }}>
-                            <GoalEditor
-                              goal={g}
-                              budgetCategories={budgetCategories}
-                              recurringExpenses={recurringExpenses}
-                              onUpdate={(patch) => updateGoal(g.id, patch)}
-                              adjAmount={adjAmount}
-                              setAdjAmount={setAdjAmount}
-                              adjSign={adjSign}
-                              setAdjSign={setAdjSign}
-                              adjNote={adjNote}
-                              setAdjNote={setAdjNote}
-                              onAddAdjustment={() => addManualAdjustment(g.id)}
-                              onRemoveAdjustment={(adjId) => removeManualAdjustment(g.id, adjId)}
-                              showAllAdj={adjShowAll}
-                              onToggleShowAllAdj={() => setAdjShowAll((v) => !v)}
-                            />
+                          <td colSpan={6} className="goal-row__editor-cell">
+                            {editorFor(g)}
                           </td>
                         </tr>
                       )}
@@ -628,37 +623,30 @@ export default function GoalsPage() {
               </tbody>
             </table>
           </div>
-          {!isMobile && (
-            <AddGoalForm formId="add-form" draft={draft} setDraft={setDraft} onAdd={addGoal} budgetCategories={budgetCategories} recurringExpenses={recurringExpenses} attempted={attempted} />
-          )}
         </div>
       )}
 
-      {/* Add form when no goals yet */}
+      {/* Empty state: the form stays inline so the page has an action */}
       {goals.length === 0 && (
-        <div className="sheet" style={{ paddingTop: "20px", paddingBottom: 0 }}>
-          <div style={{ padding: "0 28px" }} className="mb-3">
-            <p className="kicker">New goal</p>
+        <div className="sheet table-card">
+          <div className="table-card__head mb-3">
             <h2 className="section-title">Add your first goal</h2>
+            <p className="muted">A savings target or a debt to pay off. Once it exists you can fund it from budget categories or bills.</p>
           </div>
-          <AddGoalForm draft={draft} setDraft={setDraft} onAdd={addGoal} budgetCategories={budgetCategories} recurringExpenses={recurringExpenses} attempted={attempted} />
+          <AddGoalForm draft={draft} setDraft={setDraft} onAdd={addGoal} attempted={attempted} />
         </div>
       )}
 
-      {/* Mobile add sheet — same form the desktop inline block uses */}
-      {isMobile && addOpen && (
-        <BottomSheet open title="Add goal" onClose={() => setAddOpen(false)}>
-          <AddGoalForm
-            inSheet
-            draft={draft}
-            setDraft={setDraft}
-            onAdd={() => { if (addGoal()) setAddOpen(false); }}
-            budgetCategories={budgetCategories}
-            recurringExpenses={recurringExpenses}
-            attempted={attempted}
-          />
-        </BottomSheet>
-      )}
+      {/* "+ Add goal": dialog on desktop, bottom sheet on mobile */}
+      <FormDialog open={addOpen} title="Add goal" onClose={() => setAddOpen(false)}>
+        <AddGoalForm
+          inSheet
+          draft={draft}
+          setDraft={setDraft}
+          onAdd={() => { if (addGoal()) setAddOpen(false); }}
+          attempted={attempted}
+        />
+      </FormDialog>
 
       {/* Mobile edit sheet — same editor the desktop inline row uses */}
       {isMobile && expandedGoal && (
@@ -667,23 +655,7 @@ export default function GoalsPage() {
           title={`Edit — ${expandedGoal.name || "goal"}`}
           onClose={() => setExpandedGoalId(null)}
         >
-          <GoalEditor
-            goal={expandedGoal}
-            budgetCategories={budgetCategories}
-            recurringExpenses={recurringExpenses}
-            onUpdate={(patch) => updateGoal(expandedGoal.id, patch)}
-            adjAmount={adjAmount}
-            setAdjAmount={setAdjAmount}
-            adjSign={adjSign}
-            setAdjSign={setAdjSign}
-            adjNote={adjNote}
-            setAdjNote={setAdjNote}
-            onAddAdjustment={() => addManualAdjustment(expandedGoal.id)}
-            onRemoveAdjustment={(adjId) => removeManualAdjustment(expandedGoal.id, adjId)}
-            showAllAdj={adjShowAll}
-            onToggleShowAllAdj={() => setAdjShowAll((v) => !v)}
-            inSheet
-          />
+          {editorFor(expandedGoal)}
         </BottomSheet>
       )}
 

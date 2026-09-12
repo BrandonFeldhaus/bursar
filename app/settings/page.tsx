@@ -1,16 +1,40 @@
 "use client";
 
-import { ChangeEvent, useState } from "react";
-import { clearBudget, loadBudget, saveBudget, type BudgetState } from "../lib/budgetStorage";
+import { useEffect, useState } from "react";
+import { loadState, saveState } from "../lib/storage";
 import { todayISO } from "../lib/month";
+import { useHydrated } from "../lib/useHydrated";
+import { eraseAllData } from "../lib/eraseAllData";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { ImportLedgerButton } from "../components/ImportLedgerButton";
+import { Hint, dismissHint, type HintId } from "../components/Hint";
 
 export default function SettingsPage() {
+  const hydrated = useHydrated();
   const [status, setStatus] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
+  const [hints, setHints] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    setHints(loadState().meta.hints);
+  }, [hydrated]);
+
+  function dismiss(id: HintId) {
+    const next = dismissHint(loadState(), id);
+    saveState(next);
+    setHints(next.meta.hints);
+  }
+
+  function showHintsAgain() {
+    const next = loadState();
+    saveState({ ...next, meta: { ...next.meta, hints: [] } });
+    setHints([]);
+    setStatus("Hints will show again on each page.");
+  }
 
   function exportData() {
-    const state = loadBudget();
+    const state = loadState();
     const now = new Date();
     const payload = {
       app: "Bursar",
@@ -30,79 +54,43 @@ export default function SettingsPage() {
     setStatus("Export complete.");
   }
 
-  async function importData(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const parsed: unknown = JSON.parse(text);
-      const incoming =
-        typeof parsed === "object" && parsed !== null && "data" in parsed
-          ? (parsed as { data?: unknown }).data
-          : typeof parsed === "object" && parsed !== null && "budgetAppV1" in parsed
-          ? (parsed as { budgetAppV1?: unknown }).budgetAppV1
-          : parsed;
-      if (!incoming || typeof incoming !== "object") {
-        setStatus("Import failed: invalid budget file.");
-        return;
-      }
-      saveBudget(incoming as BudgetState);
-      setStatus("Import complete. Reloading…");
-      setTimeout(() => window.location.reload(), 300);
-    } catch {
-      setStatus("Import failed: invalid JSON.");
-    } finally {
-      event.target.value = "";
-    }
-  }
-
-  function resetOnboarding() {
-    clearBudget();
-    window.location.href = "/onboarding";
-  }
-
   return (
     <section className="container">
       {/* Page head */}
       <header className="sheet page-head">
-        <p className="kicker">Settings</p>
-        <h1 className="page-head__title">Data &amp; backup</h1>
-        <p className="page-head__lead">Back up your ledger, restore from a saved file, or reset the app to start fresh.</p>
+        <h1 className="page-head__title">Settings</h1>
+        <p className="page-head__lead">Back up your data, restore it from a saved file, or erase everything and start fresh.</p>
       </header>
+
+      {hints && <Hint id="settings" hints={hints} onDismiss={dismiss} />}
 
       {/* Settings cards */}
       <div className="settings-grid">
         <div className="sheet settings-card">
           <div className="row-between mb-3">
-            <div>
-              <p className="kicker">Backup</p>
-              <h2 className="section-title">Backup &amp; restore</h2>
-            </div>
+            <h2 className="section-title">Backup &amp; restore</h2>
             <span className="badge">v1</span>
           </div>
-          <p className="muted">Save your full ledger to a JSON file, or load it back from a previously exported file.</p>
+          <p className="muted">Save everything to a JSON file, or load it back from a previously exported file.</p>
           <div className="settings-actions">
             <button className="btn" type="button" onClick={exportData}>
               Export JSON
             </button>
-            <label className="btn btn--ghost" style={{ cursor: "pointer" }}>
-              Import JSON
-              <input type="file" accept="application/json,.json" onChange={importData} style={{ display: "none" }} />
-            </label>
+            <ImportLedgerButton onStatus={setStatus}>Import JSON</ImportLedgerButton>
           </div>
         </div>
 
         <div className="sheet settings-card">
           <div className="row-between mb-3">
-            <div>
-              <p className="kicker">Reset</p>
-              <h2 className="section-title">Onboarding reset</h2>
-            </div>
+            <h2 className="section-title">Start over</h2>
           </div>
-          <p className="muted">Wipes all local data and returns to onboarding. Use this if you want to start fresh on this device.</p>
+          <p className="muted">Erases everything Bursar has stored in this browser and returns to an empty Overview. Export a backup first if you want to keep it. You can also bring back the one-line hints on each page.</p>
           <div className="settings-actions">
             <button className="btn btn--danger" type="button" onClick={() => setResetOpen(true)}>
-              Reset onboarding
+              Erase all data
+            </button>
+            <button className="btn btn--ghost" type="button" onClick={showHintsAgain} disabled={!hints || hints.length === 0}>
+              Show hints again
             </button>
           </div>
         </div>
@@ -110,19 +98,19 @@ export default function SettingsPage() {
 
       {/* Status message */}
       {status && (
-        <div className="sheet" style={{ padding: "14px 22px" }}>
+        <div className="sheet sheet--bar">
           <p className="muted" role="status">{status}</p>
         </div>
       )}
 
       <ConfirmDialog
         open={resetOpen}
-        title="Reset onboarding?"
-        body="This will erase all your local data and return you to the onboarding flow. This cannot be undone."
-        confirmLabel="Reset"
+        title="Erase all data?"
+        body="This deletes your income, bills, budget, goals, and month snapshots from this browser. This cannot be undone."
+        confirmLabel="Erase"
         cancelLabel="Cancel"
         destructive
-        onConfirm={resetOnboarding}
+        onConfirm={eraseAllData}
         onCancel={() => setResetOpen(false)}
       />
     </section>
