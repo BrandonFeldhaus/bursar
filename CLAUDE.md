@@ -94,7 +94,7 @@ Inline expanded `<tr>` on desktop, `BottomSheet` on mobile; two stacked sections
 - **Adjustments** — unchanged: the dated list (recent three, *Show all*), and the +/− amount + note form (`.inline-form--bare`, button "Add adjustment").
 
 ### Keyboard (`lib/useSheetKeyboard.ts`)
-Mobile browsers don't shrink the layout for the keyboard, so a fixed bottom sheet ends up under it. `BottomSheet` calls `useSheetKeyboard`, which watches `visualViewport` and, once the keyboard covers ≥ 80px, adds `.bottom-sheet--keyboard`: the sheet pins full height `--sheet-top` + 12px from the top and keeps `--sheet-inset` clear at the bottom, and the focused `.field` is scrolled into view inside `.bottom-sheet__body`. It stays pinned until the sheet closes, and while a field (input / select / textarea) keeps focus the inset only grows, so the form doesn't move when the keyboard hides for a select or date picker, or shrinks to a number pad. With nothing focused the inset follows the viewport. A new layout height (rotation) or pinch zoom (`scale > 1`, ignored) never leaves it stuck. Nothing autofocuses a field on touch screens (see `useModal`).
+Mobile browsers don't shrink the layout for the keyboard, so a fixed bottom sheet ends up under it. `BottomSheet` calls `useSheetKeyboard`, which watches `visualViewport` resizes and, once the keyboard (layout height − `visualViewport.height`) covers ≥ 80px, adds `.bottom-sheet--keyboard`: the sheet pins full height 12px from the top, `--sheet-inset` (the keyboard) is kept clear at the bottom, and the focused `.field` is scrolled into view inside `.bottom-sheet__body`. It stays pinned until the sheet closes. The visible area always follows the real keyboard; while a field (input / select / textarea) keeps focus, whatever height the keyboard gives back (hidden for a select or date picker, shrunk to a number pad) becomes `--sheet-reserve` scroll room at the end of the body, so the body's scroll position never clamps and the form doesn't move. **Never use `visualViewport.offsetTop`** for the position: iOS reports its reveal-the-field pan there while the fixed sheet stays put on screen, and following it pushed the sheet down until only the tapped field showed above the keyboard. A new layout height (rotation) starts over and pinch zoom (`scale > 1`) is ignored. Nothing autofocuses a field on touch screens, and `useModal` restores the page's scroll position on close in case iOS scrolled it behind the sheet.
 
 ### Pay cycles
 `PayCycle = "biweekly" | "semimonthly" | "weekly" | "monthly"`
@@ -149,7 +149,7 @@ tests/
   month-view.test.ts         # viewStateForMonth, snapshotForMonth, upsertSnapshot, backfillSnapshots,
                              # saveState upserting the current month (window/localStorage stubbed), legacy snapshots
   sample-data.test.ts        # meta.hints / meta.demo defaults, sampleData() round-trips through normalizeParsed
-  sheet-keyboard.test.ts     # nextSheetKeyboard: expand threshold, pan, inset held while a field is focused, rotation reset
+  sheet-keyboard.test.ts     # nextSheetKeyboard: expand threshold, inset follows the keyboard, reserve held while a field is focused, rotation reset
   helpers.ts                 # semiIncome(), biwIncome(), monthlyExpense(), annualExpense(), etc.
   fixtures/                  # scenario JSON files (A–I) for import testing
 ```
@@ -179,7 +179,7 @@ The design uses a "ruled ledger paper" aesthetic.
 | `--pos` | timeline tick / label / today marker | `.timeline__tick`, `.timeline__lbl`, `.timeline__today` (`left: var(--pos)`) |
 | `--swatch` | allocation ring segment, swatch, bar | `.ring__segment` (`stroke`), `.allocation-swatch`, `.allocation-bar__fill--swatch` (`background`) |
 | `--top` / `--left` | `FundingPicker` (button rect) | `.funding-picker__popover` (`top` / `left`) |
-| `--sheet-top` / `--sheet-inset` | `useSheetKeyboard` (`style.setProperty` on the panel, not a TSX `style`) | `.bottom-sheet--keyboard` (`inset` top / `padding-bottom`) |
+| `--sheet-inset` / `--sheet-reserve` | `useSheetKeyboard` (`style.setProperty` on the panel, not a TSX `style`) | `.bottom-sheet--keyboard` (`padding-bottom`) / its `.bottom-sheet__body` (`padding-bottom`) |
 
 Write them as `style={{ "--pct": `${pct}%` } as CSSProperties}` (the cast is needed because `React.CSSProperties` has no index signature). Computed *colours* pick a modifier class (`--done`, `--debt`, `--neg`) rather than an inline value; the allocation ring is the one place a colour is passed through, via `--chart-1…7` tokens. Everything else — paddings, flex rows, font sizes, column widths — is a class. New classes follow the existing BEM-ish `.block__element--modifier` naming and go under the `/* ===== SECTION ===== */` comment of the component they belong to.
 

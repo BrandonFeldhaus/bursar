@@ -3116,19 +3116,19 @@ select {
 /* The panel takes focus on touch screens instead of a field (useModal) */
 .bottom-sheet:focus { outline: none; }
 
-/* Keyboard up (useSheetKeyboard): the sheet pins to the visible part of the screen at full
-   height and stays pinned until it closes, so its fields hold still while the keyboard hides
-   for a picker and comes back. --sheet-top is how far the browser panned the view,
-   --sheet-inset the height the keyboard covers; the body scrolls in between. */
+/* Keyboard up (useSheetKeyboard): the sheet pins full height and stays pinned until it closes,
+   so its fields hold still while the keyboard hides for a picker and comes back. The body
+   scrolls between the head and --sheet-inset (the height the keyboard covers);
+   --sheet-reserve is spare scroll room at its end so a hiding keyboard never scrolls the form. */
 .bottom-sheet--keyboard {
   position: absolute;
-  inset: calc(var(--sheet-top) + var(--space-3)) 0 0;
+  inset: var(--space-3) 0 0;
   max-height: none;
   padding-bottom: max(var(--sheet-inset), env(safe-area-inset-bottom, 0px));
 }
 .bottom-sheet--keyboard .bottom-sheet__body {
   flex: 1 1 auto;
-  padding-bottom: 18px;
+  padding-bottom: calc(18px + var(--sheet-reserve));
 }
 
 /* Add forms inside FormDialog / BottomSheet lose their sunk-paper chrome and run two

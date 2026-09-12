@@ -8,34 +8,38 @@ const KEYBOARD_MIN = 80;
 export type SheetKeyboard = {
   /** The keyboard has come up since the sheet opened: the sheet is pinned full height until it closes. */
   expanded: boolean;
-  /** How far below the top of the overlay the visible area starts (Safari pans it to reveal a field). */
-  top: number;
-  /** How much of the overlay's bottom the sheet keeps clear for the keyboard. */
+  /** The height the keyboard covers now; the sheet's visible area ends above it. */
   inset: number;
+  /** Extra scroll room at the end of the sheet body, so a keyboard that hides or shrinks doesn't scroll the form. */
+  reserve: number;
   layoutHeight: number;
 };
 
-export const SHEET_KEYBOARD_CLOSED: SheetKeyboard = { expanded: false, top: 0, inset: 0, layoutHeight: 0 };
+export const SHEET_KEYBOARD_CLOSED: SheetKeyboard = { expanded: false, inset: 0, reserve: 0, layoutHeight: 0 };
 
 /**
  * Where a bottom sheet sits for a given visual viewport. Mobile browsers don't shrink the layout for the
- * on-screen keyboard, so a fixed sheet ends up underneath it; this measures what the keyboard covers.
- * Once the keyboard has appeared the sheet stays expanded, so its fields never move when the keyboard
- * hides for a select or date picker and comes back. While a field keeps focus the inset only grows — a
- * shorter number pad or a closed keyboard doesn't pull the bottom edge down under the user's thumb.
+ * on-screen keyboard, so a fixed sheet ends up underneath it; the keyboard is whatever the visual viewport
+ * lost. `offsetTop` is deliberately ignored: iOS reports its reveal-the-field pan there while a fixed sheet
+ * stays put on screen, so following it pushed the sheet down behind the keyboard.
+ *
+ * Once the keyboard has appeared the sheet stays pinned, so its fields don't move when the keyboard hides
+ * for a select or date picker and comes back. The visible area always follows the real keyboard (nothing is
+ * hidden behind empty space); while a field keeps focus, the height the keyboard gave back becomes scroll
+ * room at the end of the body instead, so the body's scroll position never has to clamp.
  */
 export function nextSheetKeyboard(
   prev: SheetKeyboard,
-  viewport: { layoutHeight: number; height: number; offsetTop: number },
+  viewport: { layoutHeight: number; height: number },
   fieldFocused: boolean,
 ): SheetKeyboard {
   const { layoutHeight } = viewport;
   // A new layout (rotation, window resize) starts over.
   const base = prev.layoutHeight === layoutHeight ? prev : SHEET_KEYBOARD_CLOSED;
-  const top = Math.max(0, Math.round(viewport.offsetTop));
-  const inset = Math.max(0, Math.round(layoutHeight - viewport.offsetTop - viewport.height));
+  const inset = Math.max(0, Math.round(layoutHeight - viewport.height));
   if (!base.expanded && inset < KEYBOARD_MIN) return { ...SHEET_KEYBOARD_CLOSED, layoutHeight };
-  return { expanded: true, top, inset: fieldFocused ? Math.max(inset, base.inset) : inset, layoutHeight };
+  const held = fieldFocused ? Math.max(inset, base.inset + base.reserve) : inset;
+  return { expanded: true, inset, reserve: held - inset, layoutHeight };
 }
 
 const NON_TEXT_INPUTS = new Set(["checkbox", "radio", "range", "color", "file", "image", "button", "submit", "reset", "hidden"]);
@@ -51,7 +55,7 @@ export function opensKeyboard(el: EventTarget | null): boolean {
 
 /**
  * Keeps an open BottomSheet inside the part of the screen the keyboard leaves visible: it tracks
- * `visualViewport`, writes `--sheet-top` / `--sheet-inset` on the panel and adds `.bottom-sheet--keyboard`,
+ * `visualViewport`, writes `--sheet-inset` / `--sheet-reserve` on the panel and adds `.bottom-sheet--keyboard`,
  * then scrolls the focused field into view inside the sheet body instead of letting the page move.
  */
 export function useSheetKeyboard(open: boolean, panelRef: RefObject<HTMLElement | null>) {
@@ -87,15 +91,15 @@ export function useSheetKeyboard(open: boolean, panelRef: RefObject<HTMLElement 
       if (viewport!.scale > 1) return; // pinch-zoomed: the viewport says nothing about the keyboard
       const next = nextSheetKeyboard(
         state,
-        { layoutHeight: overlay!.clientHeight, height: viewport!.height, offsetTop: viewport!.offsetTop },
+        { layoutHeight: overlay!.clientHeight, height: viewport!.height },
         focusedField() !== null,
       );
-      const moved = next.expanded !== state.expanded || next.top !== state.top || next.inset !== state.inset;
+      const moved = next.expanded !== state.expanded || next.inset !== state.inset || next.reserve !== state.reserve;
       state = next;
       if (!moved) return;
       panel!.classList.toggle("bottom-sheet--keyboard", next.expanded);
-      panel!.style.setProperty("--sheet-top", `${next.top}px`);
       panel!.style.setProperty("--sheet-inset", `${next.inset}px`);
+      panel!.style.setProperty("--sheet-reserve", `${next.reserve}px`);
       reveal();
     }
 
@@ -115,7 +119,6 @@ export function useSheetKeyboard(open: boolean, panelRef: RefObject<HTMLElement 
     const onFocusOut = () => schedule();
 
     viewport.addEventListener("resize", onViewport);
-    viewport.addEventListener("scroll", onViewport);
     panel.addEventListener("focusin", onFocusIn);
     panel.addEventListener("focusout", onFocusOut);
     update();
@@ -123,12 +126,11 @@ export function useSheetKeyboard(open: boolean, panelRef: RefObject<HTMLElement 
     return () => {
       cancelAnimationFrame(frame);
       viewport.removeEventListener("resize", onViewport);
-      viewport.removeEventListener("scroll", onViewport);
       panel.removeEventListener("focusin", onFocusIn);
       panel.removeEventListener("focusout", onFocusOut);
       panel.classList.remove("bottom-sheet--keyboard");
-      panel.style.removeProperty("--sheet-top");
       panel.style.removeProperty("--sheet-inset");
+      panel.style.removeProperty("--sheet-reserve");
     };
   }, [open, panelRef]);
 }
