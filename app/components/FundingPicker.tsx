@@ -5,27 +5,26 @@ import { createPortal } from "react-dom";
 import { IconCheck, IconPlus } from "@tabler/icons-react";
 import { BottomSheet } from "./BottomSheet";
 import { useIsMobile } from "../lib/useIsMobile";
-import { moneyFmt } from "../lib/currency";
-import type { FundingSource } from "../lib/goalFunding";
+import { fundingAmountLabel, type FundingSource } from "../lib/goalFunding";
 
 const POPOVER_WIDTH = 340;
 
 /**
  * "Add funding source" for a goal: a button that opens the candidates grouped under
- * Budget categories and Bills, each row showing its amount for the current paycheck
- * period. Desktop gets a popover anchored to the button, mobile the BottomSheet.
- * Sources the goal already uses are shown checked and disabled.
+ * Budget categories and Bills — a category's amount per paycheck, a bill's as billed.
+ * Desktop gets a popover anchored to the button, mobile the BottomSheet. Rows toggle:
+ * sources the goal already uses are checked, and choosing one again removes it.
  */
 export function FundingPicker({
   goalType,
   candidates,
   isAdded,
-  onAdd,
+  onToggle,
 }: {
   goalType: "savings" | "debt";
   candidates: FundingSource[];
   isAdded: (source: FundingSource) => boolean;
-  onAdd: (source: FundingSource) => void;
+  onToggle: (source: FundingSource) => void;
 }) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
@@ -96,15 +95,14 @@ export function FundingPicker({
                     <button
                       type="button"
                       className={`funding-picker__row${added ? " funding-picker__row--added" : ""}`}
-                      disabled={added}
                       aria-pressed={added}
-                      onClick={() => onAdd(s)}
+                      onClick={() => onToggle(s)}
                     >
                       <span className="funding-picker__check" aria-hidden="true">
                         {added && <IconCheck size={14} />}
                       </span>
                       <span className="funding-picker__name">{s.name}</span>
-                      <span className="funding-picker__amount">{moneyFmt(s.amount)}</span>
+                      <span className="funding-picker__amount">{fundingAmountLabel(s)}</span>
                     </button>
                   </li>
                 );
@@ -132,7 +130,7 @@ export function FundingPicker({
       </button>
 
       {open && isMobile && (
-        <BottomSheet open title="Add funding source" onClose={() => setOpen(false)}>
+        <BottomSheet open title="Funding sources" onClose={() => setOpen(false)}>
           {list}
         </BottomSheet>
       )}
@@ -142,7 +140,7 @@ export function FundingPicker({
           ref={popRef}
           className="funding-picker__popover"
           role="dialog"
-          aria-label="Add funding source"
+          aria-label="Funding sources"
           style={{ "--top": `${pos.top}px`, "--left": `${pos.left}px` } as CSSProperties}
         >
           {list}

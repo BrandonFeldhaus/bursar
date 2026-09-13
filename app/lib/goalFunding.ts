@@ -1,24 +1,34 @@
 import type { BudgetState, Goal, RecurringExpense } from "./budgetStorage";
-import type { AllocationResult } from "./allocations";
-import { monthKeyFromISO, paycheckPeriodsForMonth, shiftMonth, toISODate, type PaycheckPeriod } from "./month";
+import { computeAllocations, type AllocationResult } from "./allocations";
+import { moneyFmt } from "./currency";
+import { paycheckPeriodsForMonth, shiftMonth, type PaycheckPeriod } from "./month";
 
 /**
  * How a goal gets funded. A goal is linked to budget categories and bills
  * (`linkedBudgetCategoryIds` / `linkedExpenseIds`); ticking the goal on a paycheck
  * period applies the sum of what those sources come to in that period. This module is
- * the one place that sum is computed — the Overview's Goals tab and the goal editor's
- * "Funded by" section both read it from here.
+ * the one place that sum is computed — the Overview's Goals tab applies it per period,
+ * and the goal editor's "Funded by" section shows its average per paycheck.
  */
 
 export type FundingSource = {
   kind: "category" | "bill";
   id: string;
   name: string;
-  /** What the source contributes in one period: the category's allocation, or the bill's amount when it is due in that period. */
-  amount: number;
+  /**
+   * What the source adds per paycheck on average over a year of periods. A category's share
+   * follows each period's leftover, and a bill counts only in the period it is due, so a
+   * monthly bill is spread across every paycheck.
+   */
+  perPaycheck: number;
+  /** Bills only: the bill's own amount and how often it repeats, as the Bills page shows it. */
+  bill?: { amount: number; cadence: RecurringExpense["cadence"] };
 };
 
 type PeriodBill = Pick<PaycheckPeriod["bills"][number], "expenseId" | "amount">;
+
+/** A whole year, so every bill lands in the average exactly twelve times. */
+const AVERAGE_MONTHS = 12;
 
 /** What one category or bill contributes in a period. An id that no longer exists contributes 0. */
 export function sourceAmount(
@@ -42,25 +52,37 @@ export function goalFundingTotal(
   return fromCategories + fromBills;
 }
 
-/** Every category and bill a goal could be funded by, with its amount for the period (0 for a bill not due in it). */
-export function fundingCandidates(
-  allocations: AllocationResult[],
-  periodBills: PeriodBill[],
-  recurringExpenses: Pick<RecurringExpense, "id" | "name">[],
-): FundingSource[] {
-  const categories: FundingSource[] = allocations.map((a) => ({
+/**
+ * Every category and bill a goal could be funded by, with what it adds per paycheck on
+ * average across the paycheck periods of the twelve months starting at `monthKey`.
+ */
+export function fundingCandidates(state: BudgetState, monthKey: string): FundingSource[] {
+  const periods = Array.from({ length: AVERAGE_MONTHS }, (_, i) => paycheckPeriodsForMonth(state, shiftMonth(monthKey, i)))
+    .flat()
+    .map((p) => ({ allocations: computeAllocations(p.leftover, state.budgetCategories), bills: p.bills }));
+  const perPaycheck = (kind: FundingSource["kind"], id: string) =>
+    periods.reduce((s, p) => s + sourceAmount(kind, id, p.allocations, p.bills), 0) / periods.length;
+
+  const categories: FundingSource[] = state.budgetCategories.map((c) => ({
     kind: "category",
-    id: a.id,
-    name: a.name,
-    amount: sourceAmount("category", a.id, allocations, periodBills),
+    id: c.id,
+    name: c.name,
+    perPaycheck: perPaycheck("category", c.id),
   }));
-  const bills: FundingSource[] = recurringExpenses.map((e) => ({
+  const bills: FundingSource[] = state.recurringExpenses.map((e) => ({
     kind: "bill",
     id: e.id,
     name: e.name,
-    amount: sourceAmount("bill", e.id, allocations, periodBills),
+    perPaycheck: perPaycheck("bill", e.id),
+    bill: { amount: e.amount, cadence: e.cadence },
   }));
   return [...categories, ...bills];
+}
+
+/** A source's amount in the picker and on its chip: a bill as billed ("$1,300.00/mo"), a category per paycheck. */
+export function fundingAmountLabel(source: FundingSource): string {
+  if (!source.bill) return moneyFmt(source.perPaycheck);
+  return `${moneyFmt(source.bill.amount)}/${source.bill.cadence === "annual" ? "yr" : "mo"}`;
 }
 
 /** The goal's linked sources, categories then bills, in link order. Ids with no matching candidate are dropped. */
@@ -77,18 +99,4 @@ export function goalFundingSources(
 export function paychecksToGo(remaining: number, perPaycheck: number): number | null {
   if (!(perPaycheck > 0) || !(remaining > 0)) return null;
   return Math.ceil(remaining / perPaycheck);
-}
-
-/**
- * The paycheck period that contains `today`: one of this month's periods, or the previous
- * month's last period while it still overhangs into this month (before the first payday).
- */
-export function currentPeriod(state: BudgetState, today: Date = new Date()): PaycheckPeriod | null {
-  const monthKey = monthKeyFromISO(toISODate(today));
-  const day = today.getDate();
-  const periods = paycheckPeriodsForMonth(state, monthKey);
-  const inMonth = periods.find((p) => p.startDay <= day && day <= p.endDay);
-  if (inMonth) return inMonth;
-  const previous = paycheckPeriodsForMonth(state, shiftMonth(monthKey, -1));
-  return previous[previous.length - 1] ?? periods[0] ?? null;
 }

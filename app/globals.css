@@ -2545,8 +2545,6 @@ select {
 }
 .funding-picker__row:hover { background: var(--ink-a06); }
 .funding-picker__row:focus-visible { outline: 2px solid var(--ink-1); outline-offset: -2px; }
-.funding-picker__row--added { color: var(--ink-3); cursor: default; }
-.funding-picker__row--added:hover { background: transparent; }
 .funding-picker__check {
   display: inline-grid;
   place-items: center;

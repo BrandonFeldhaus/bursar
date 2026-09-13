@@ -6,9 +6,8 @@ import { loadState, newId, saveState, type BudgetState, type Goal } from "../lib
 import { useHydrated } from "../lib/useHydrated";
 import { useIsMobile } from "../lib/useIsMobile";
 import { moneyFmt } from "../lib/currency";
-import { computeAllocations } from "../lib/allocations";
 import {
-  currentPeriod,
+  fundingAmountLabel,
   fundingCandidates,
   goalFundingSources,
   paychecksToGo,
@@ -20,7 +19,7 @@ import { BottomSheet } from "../components/BottomSheet";
 import { FormDialog } from "../components/FormDialog";
 import { FundingPicker } from "../components/FundingPicker";
 import { AddGoalForm, emptyGoalDraft, goalDraftErrors, goalFromDraft, type DraftGoal } from "../components/AddGoalForm";
-import { toISODate } from "../lib/month";
+import { currentMonthKey, toISODate } from "../lib/month";
 import { formatAdjustmentDate, sortAdjustmentsForDisplay } from "../lib/goalAdjustments";
 import { Hint, dismissHint, type HintId } from "../components/Hint";
 
@@ -95,7 +94,7 @@ function GoalEditor({
   onToggleShowAllAdj: () => void;
 }) {
   const sources = goalFundingSources(goal, candidates);
-  const perPaycheck = sources.reduce((s, x) => s + x.amount, 0);
+  const perPaycheck = sources.reduce((s, x) => s + x.perPaycheck, 0);
   const remaining = Math.max(0, goal.targetAmount - goalTotalApplied(goal));
   const toGo = paychecksToGo(remaining, perPaycheck);
 
@@ -120,14 +119,14 @@ function GoalEditor({
     <div className="goal-editor">
       <section className="goal-editor__section">
         <h4 className="goal-editor__heading">Funded by</h4>
-        <p className="goal-editor__explainer">When you tick this goal on a paycheck period, these amounts count toward it.</p>
+        <p className="goal-editor__explainer">When you tick this goal on a paycheck period, these count toward it: a category's share of that paycheck, and a bill in the period it's due.</p>
 
         {sources.length > 0 ? (
           <ul className="funding-chips">
             {sources.map((s) => (
               <li key={`${s.kind}:${s.id}`} className="funding-chip">
                 <span className="funding-chip__name">{s.name}</span>
-                <span className="funding-chip__amount">{moneyFmt(s.amount)}</span>
+                <span className="funding-chip__amount">{fundingAmountLabel(s)}</span>
                 <button
                   type="button"
                   className="funding-chip__remove"
@@ -153,7 +152,12 @@ function GoalEditor({
         )}
 
         {candidates.length > 0 ? (
-          <FundingPicker goalType={goal.type} candidates={candidates} isAdded={isAdded} onAdd={addSource} />
+          <FundingPicker
+            goalType={goal.type}
+            candidates={candidates}
+            isAdded={isAdded}
+            onToggle={(s) => (isAdded(s) ? removeSource(s) : addSource(s))}
+          />
         ) : (
           <p className="goal-editor__none">Add budget categories or bills first, then fund this goal from them.</p>
         )}
@@ -395,15 +399,12 @@ export default function GoalsPage() {
     savedIndicator.flash();
   }
 
-  // What each category and bill comes to in the paycheck period that contains today —
-  // the amounts shown in the picker, the chips, and the per-paycheck total.
-  const candidates = useMemo((): FundingSource[] => {
-    if (!state) return [];
-    const period = currentPeriod(state);
-    if (!period) return [];
-    const allocations = computeAllocations(period.leftover, state.budgetCategories);
-    return fundingCandidates(allocations, period.bills, state.recurringExpenses);
-  }, [state]);
+  // What each category and bill adds per paycheck, averaged over the coming year of paycheck
+  // periods so a monthly bill is spread across every paycheck — feeds the per-paycheck total.
+  const candidates = useMemo(
+    (): FundingSource[] => (state ? fundingCandidates(state, currentMonthKey()) : []),
+    [state],
+  );
 
   if (!hydrated || !state) {
     return (
