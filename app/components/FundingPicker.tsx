@@ -129,8 +129,8 @@ export function FundingPicker({
         Add funding source
       </button>
 
-      {open && isMobile && (
-        <BottomSheet open title="Funding sources" onClose={() => setOpen(false)}>
+      {isMobile && (
+        <BottomSheet open={open} title="Funding sources" onClose={() => setOpen(false)}>
           {list}
         </BottomSheet>
       )}

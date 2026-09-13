@@ -100,6 +100,7 @@ html {
 }
 
 body {
+  position: relative; /* iOS 26+: Base UI backdrops are position: absolute against it */
   min-height: 100%;
   overflow-x: clip;
   margin: 0;
@@ -3053,6 +3054,55 @@ select {
 }
 
 /* =========================================================
+   MODAL LAYERS — the Base UI parts under FormDialog and
+   BottomSheet: Backdrop (.dialog-overlay, role=presentation)
+   dims the page, Viewport (.dialog-viewport) places the panel
+   ========================================================= */
+
+/* Fades in and out; under a sheet it also fades with the swipe (--drawer-swipe-progress). */
+.dialog-overlay[role="presentation"] {
+  opacity: calc(1 - var(--drawer-swipe-progress, 0));
+  transition: opacity 0.25s ease;
+}
+.dialog-overlay[role="presentation"][data-starting-style],
+.dialog-overlay[role="presentation"][data-ending-style] {
+  opacity: 0;
+}
+.dialog-overlay[role="presentation"][data-ending-style] {
+  transition-duration: calc(var(--drawer-swipe-strength, 1) * 0.25s);
+}
+.dialog-overlay[role="presentation"][data-swiping] {
+  transition-duration: 0ms;
+}
+
+/* iOS 26+ draws the page under the browser chrome, where a fixed backdrop stops short;
+   an absolute one on the positioned <body> covers it. */
+@supports (-webkit-touch-callout: none) {
+  .dialog-overlay[role="presentation"] {
+    position: absolute;
+    min-height: 100dvh;
+  }
+}
+
+.dialog-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.dialog-viewport--sheet {
+  place-items: end stretch;
+  padding: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-overlay[role="presentation"] { transition: none; }
+}
+
+/* =========================================================
    BOTTOM SHEET — mobile drawer: every add form (via FormDialog),
    the goal editor, the funding picker, and the nav's "More"
    ========================================================= */
@@ -3063,14 +3113,36 @@ select {
 }
 
 .bottom-sheet {
+  --sheet-bleed: 48px; /* paper past the bottom edge, so a drag upward never shows a gap */
   width: 100%;
   background: var(--paper-1);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-paper-lg);
-  max-height: 85vh;
+  max-height: calc(85vh + var(--sheet-bleed));
   display: flex;
   flex-direction: column;
-  animation: sheet-up 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  margin-bottom: calc(-1 * var(--sheet-bleed));
+  padding-bottom: var(--sheet-bleed);
+  transform: translateY(var(--drawer-swipe-movement-y, 0px));
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* Slides up on open and down on close (Base UI holds the element until the transition ends);
+   a released swipe closes faster the harder it was flicked, and a drag in progress follows the finger. */
+.bottom-sheet[data-starting-style],
+.bottom-sheet[data-ending-style] {
+  transform: translateY(100%);
+}
+.bottom-sheet[data-ending-style] {
+  transition-duration: calc(var(--drawer-swipe-strength, 1) * 0.25s);
+}
+.bottom-sheet[data-swiping] {
+  transition-duration: 0ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-sheet { transition: none; }
 }
 
 @keyframes sheet-up {
@@ -3111,7 +3183,7 @@ select {
   overscroll-behavior: contain;
 }
 
-/* The panel takes focus on touch screens instead of a field (useModal) */
+/* The panel takes focus on touch screens instead of a field (modalInitialFocus) */
 .bottom-sheet:focus { outline: none; }
 
 /* A field was tapped (useSheetKeyboard): the sheet pins full height and stays pinned until it
@@ -3157,6 +3229,19 @@ select {
   padding: 0;
   gap: 0;
   overflow: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dialog--form[data-starting-style],
+.dialog--form[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog--form { transition: none; }
 }
 
 .dialog--form:focus { outline: none; }

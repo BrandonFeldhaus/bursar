@@ -18,6 +18,7 @@ import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { BottomSheet } from "../components/BottomSheet";
 import { FormDialog } from "../components/FormDialog";
 import { FundingPicker } from "../components/FundingPicker";
+import { Form, advanceOnEnter } from "../components/Form";
 import { AddGoalForm, emptyGoalDraft, goalDraftErrors, goalFromDraft, type DraftGoal } from "../components/AddGoalForm";
 import { currentMonthKey, toISODate } from "../lib/month";
 import { formatAdjustmentDate, sortAdjustmentsForDisplay } from "../lib/goalAdjustments";
@@ -207,7 +208,7 @@ function GoalEditor({
         ) : (
           <p className="goal-editor__none">No adjustments yet.</p>
         )}
-        <div className="inline-form inline-form--2col inline-form--bare">
+        <Form className="inline-form inline-form--2col inline-form--bare" onSubmit={onAddAdjustment}>
           <div className="field">
             <label className="field__label" htmlFor={`adj-amount-${goal.id}`}>Amount</label>
             <div className="goal-editor__amount-row">
@@ -239,6 +240,7 @@ function GoalEditor({
                 type="text"
                 inputMode="decimal"
                 pattern="[0-9.]*"
+                enterKeyHint="next"
                 placeholder="e.g. 500"
                 value={adjAmount}
                 onChange={(e) => {
@@ -247,7 +249,6 @@ function GoalEditor({
                   else if (/\+/.test(raw)) setAdjSign(1);
                   setAdjAmount(raw.replace(/[^0-9.]/g, ""));
                 }}
-                onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
               />
             </div>
           </div>
@@ -257,21 +258,20 @@ function GoalEditor({
               id={`adj-note-${goal.id}`}
               className="input"
               type="text"
+              enterKeyHint="done"
               placeholder="e.g. Emergency withdrawal"
               value={adjNote}
               onChange={(e) => setAdjNote(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && onAddAdjustment()}
             />
           </div>
           <button
             className="btn"
-            type="button"
-            onClick={onAddAdjustment}
+            type="submit"
             disabled={!adjAmount.trim() || isNaN(parseAdjAmount(adjAmount)) || parseAdjAmount(adjAmount) === 0}
           >
             Add adjustment
           </button>
-        </div>
+        </Form>
       </section>
     </div>
   );
@@ -284,6 +284,8 @@ export default function GoalsPage() {
   const [draft, setDraft] = useState<DraftGoal>(emptyGoalDraft);
   const [addOpen, setAddOpen] = useState(false);
   const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
+  // The mobile edit sheet keeps showing the last goal while it animates closed.
+  const [sheetGoalId, setSheetGoalId] = useState<string | null>(null);
   const [adjAmount, setAdjAmount] = useState("");
   const [adjSign, setAdjSign] = useState<AdjSign>(1);
   const [adjNote, setAdjNote] = useState("");
@@ -305,6 +307,7 @@ export default function GoalsPage() {
   /** Open (or close) a goal's editor with a clean adjustment form. */
   function openEditor(id: string | null) {
     setExpandedGoalId(id);
+    if (id) setSheetGoalId(id);
     setAdjAmount("");
     setAdjSign(1);
     setAdjNote("");
@@ -424,6 +427,7 @@ export default function GoalsPage() {
 
   const { goals } = state;
   const expandedGoal = goals.find((g) => g.id === expandedGoalId) ?? null;
+  const sheetGoal = expandedGoal ?? goals.find((g) => g.id === sheetGoalId) ?? null;
 
   const editorFor = (g: Goal) => (
     <GoalEditor
@@ -542,11 +546,12 @@ export default function GoalsPage() {
                   const isExpanded = expandedGoalId === g.id;
                   return (
                     <Fragment key={g.id}>
-                      <tr>
+                      <tr onKeyDown={advanceOnEnter}>
                         <td data-label="Goal">
                           <input
                             className="input"
                             value={g.name}
+                            enterKeyHint="next"
                             aria-label="Goal name"
                             onChange={(e) => updateGoal(g.id, { name: e.target.value })}
                           />
@@ -575,6 +580,7 @@ export default function GoalsPage() {
                             type="text"
                             inputMode="decimal"
                             pattern="[0-9.]*"
+                            enterKeyHint="done"
                             value={g.targetAmount || ""}
                             aria-label="Target amount"
                             onChange={(e) =>
@@ -650,13 +656,13 @@ export default function GoalsPage() {
       </FormDialog>
 
       {/* Mobile edit sheet — same editor the desktop inline row uses */}
-      {isMobile && expandedGoal && (
+      {isMobile && (
         <BottomSheet
-          open
-          title={`Edit — ${expandedGoal.name || "goal"}`}
+          open={expandedGoal !== null}
+          title={`Edit — ${sheetGoal?.name || "goal"}`}
           onClose={() => setExpandedGoalId(null)}
         >
-          {editorFor(expandedGoal)}
+          {sheetGoal && editorFor(sheetGoal)}
         </BottomSheet>
       )}
 

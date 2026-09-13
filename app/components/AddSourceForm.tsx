@@ -3,6 +3,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { newId, type Income, type PayCycle } from "../lib/storage";
 import { todayISO } from "../lib/month";
+import { Form } from "./Form";
 
 // Semi-monthly is fixed to the 1st & 15th; every other cycle is anchored to a real paycheck date.
 export const needsAnchor = (cycle: PayCycle) => cycle !== "semimonthly";
@@ -69,13 +70,14 @@ export function AddSourceForm({
     inSheet ? "inline-form--sheet" : "",
   ].filter(Boolean).join(" ");
   return (
-    <div className={cls}>
+    <Form className={cls} onSubmit={onAdd}>
       <div className={`field${attempted && errs.name ? " field--has-error" : ""}`}>
         <label className="field__label" htmlFor="inc-draft-name">Name</label>
         <input
           id="inc-draft-name"
           className="input"
           placeholder="e.g. Day job"
+          enterKeyHint="next"
           value={draft.name}
           aria-invalid={attempted && !!errs.name}
           aria-describedby={attempted && errs.name ? "inc-draft-name-err" : undefined}
@@ -93,6 +95,7 @@ export function AddSourceForm({
           type="text"
           inputMode="decimal"
           pattern="[0-9.]*"
+          enterKeyHint="next"
           placeholder="0"
           value={draft.amount}
           aria-invalid={attempted && !!errs.amount}
@@ -142,9 +145,9 @@ export function AddSourceForm({
           )}
         </div>
       )}
-      <button className="btn" type="button" onClick={onAdd}>
+      <button className="btn" type="submit">
         Add income
       </button>
-    </div>
+    </Form>
   );
 }

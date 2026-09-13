@@ -5,6 +5,30 @@ All notable changes to Bursar will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-09-13
+
+Sheets and dialogs are rebuilt on [Base UI](https://base-ui.com) (`@base-ui/react`), which now handles focus, scroll locking, Escape and the backdrop. Stored data is unchanged.
+
+### Added
+
+- **Swipe a sheet down to close it.** On mobile, every bottom sheet (the add forms, the goal editor, the funding picker and More) follows your finger as you drag it down and closes when you let go. A quick flick closes it faster, and the dimmed page behind fades as you drag.
+- **Return moves to the next field.** In every add form, and in the editable rows of the Income, Bills, Budget and Goals tables, the return key goes to the next field. On a phone the key reads Next, and Done on the last field, where it closes the keyboard.
+
+### Changed
+
+- **Return no longer adds a goal or an adjustment.** Pressing Return in a goal's name or target, or in an adjustment's amount or note, used to add it right away. Now only the Add goal and Add adjustment buttons do, the same as every other form.
+- **Sheets and dialogs animate closed as well as open.** A sheet slides back down instead of disappearing, and the desktop add dialog fades and scales in and out (it used to appear with no animation). Reduce motion turns both off.
+- **Tab stays inside an open dialog or sheet** instead of moving on to the page behind it.
+
+### Fixed
+
+- **The dimmed backdrop reaches the bottom of the screen on iOS 26.** Safari now draws the page under its toolbar, and the backdrop used to stop short there, leaving a strip of the page undimmed.
+- On a phone, the Overview's cash-flow timeline starts collapsed instead of showing open for a moment first.
+
+### Removed
+
+- **The custom on-screen keyboard handling from 1.2.1–1.2.3.** Sheets no longer pin themselves above the keyboard or move their fields while you type. The browser keeps the tapped field in view.
+
 ## [1.2.4] - 2026-09-13
 
 ### Fixed

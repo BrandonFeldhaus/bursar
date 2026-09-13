@@ -11,6 +11,7 @@ import { FormDialog } from "../components/FormDialog";
 import { moneyFmt } from "../lib/currency";
 import { AddSourceForm, CYCLE_OPTIONS, emptySourceDraft, incomeFromDraft, needsAnchor, sourceDraftErrors, type SourceDraft } from "../components/AddSourceForm";
 import { Hint, dismissHint, type HintId } from "../components/Hint";
+import { advanceOnEnter } from "../components/Form";
 
 export default function IncomePage() {
   const hydrated = useHydrated();
@@ -191,11 +192,12 @@ export default function IncomePage() {
             </thead>
             <tbody>
               {state.incomes.map((inc) => (
-                <tr key={inc.id}>
+                <tr key={inc.id} onKeyDown={advanceOnEnter}>
                   <td data-label="Source">
                     <input
                       className="input"
                       value={inc.name}
+                      enterKeyHint="next"
                       aria-label="Income source name"
                       onChange={(e) => update(inc.id, { name: e.target.value })}
                     />
@@ -206,6 +208,7 @@ export default function IncomePage() {
                       type="text"
                       inputMode="decimal"
                       pattern="[0-9.]*"
+                      enterKeyHint="next"
                       value={inc.amount}
                       aria-label="Income amount"
                       onChange={(e) =>

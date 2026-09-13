@@ -12,6 +12,7 @@ import { UndoToast, type UndoEntry } from "../components/UndoToast";
 import { AddCategoryForm, emptyCategoryDraft, type CategoryFormDraft } from "../components/AddCategoryForm";
 import { FormDialog } from "../components/FormDialog";
 import { Hint, dismissHint, type HintId } from "../components/Hint";
+import { advanceOnEnter } from "../components/Form";
 
 function AllocationRing({
   segments,
@@ -283,9 +284,9 @@ export default function BudgetPage() {
             </thead>
             <tbody>
               {cats.map((c) => (
-                  <tr key={c.id}>
+                  <tr key={c.id} onKeyDown={advanceOnEnter}>
                     <td data-label="Category">
-                      <input className="input" value={c.name} aria-label="Category name" onChange={(e) => update(c.id, { name: e.target.value })} />
+                      <input className="input" value={c.name} enterKeyHint="next" aria-label="Category name" onChange={(e) => update(c.id, { name: e.target.value })} />
                     </td>
                     <td data-label="Type">
                       <select
@@ -303,6 +304,7 @@ export default function BudgetPage() {
                         className="input input--mono"
                         type="text"
                         inputMode="decimal"
+                        enterKeyHint="done"
                         value={c.value}
                         aria-label="Category value"
                         onChange={(e) =>
