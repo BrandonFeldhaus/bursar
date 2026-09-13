@@ -5,6 +5,15 @@ All notable changes to Bursar will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-09-12
+
+### Fixed
+
+- **"More" in the mobile nav works again.** Its sheet was being drawn inside the nav bar, so on some phones it was cut down to the bar's height and its links were out of reach. Every sheet and dialog now sits directly on the page.
+- **Tapping a field no longer pushes the form off the top of the screen.** The sheet now grows to full height the instant a field is tapped, before the keyboard appears, so the phone has no reason to shove the page up. The first tap on a form used to leave a blank gap and the fields above the screen.
+- **The form no longer gets cut off while editing.** After the first field, moving between fields, selects and the number pad keeps the visible part of the form above the keyboard, and the Add button is reachable by scrolling the form.
+- Closing a sheet by tapping one of its links (More → Settings) no longer carries the old page's scroll position onto the new page.
+
 ## [1.2.2] - 2026-09-12
 
 ### Fixed
