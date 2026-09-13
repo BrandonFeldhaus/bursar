@@ -2,6 +2,7 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { newId, type Goal } from "../lib/storage";
+import { Form } from "./Form";
 
 export type DraftGoal = {
   name: string;
@@ -49,18 +50,18 @@ export function AddGoalForm({
 }) {
   const errs = goalDraftErrors(draft);
   return (
-    <div className={`inline-form inline-form--3col${inSheet ? " inline-form--sheet" : ""}`}>
+    <Form className={`inline-form inline-form--3col${inSheet ? " inline-form--sheet" : ""}`} onSubmit={onAdd}>
       <div className={`field${attempted && errs.name ? " field--has-error" : ""}`}>
         <label className="field__label" htmlFor="goal-draft-name">Goal name</label>
         <input
           id="goal-draft-name"
           className="input"
           placeholder="e.g. Emergency fund"
+          enterKeyHint="next"
           value={draft.name}
           aria-invalid={attempted && !!errs.name}
           aria-describedby={attempted && errs.name ? "goal-draft-name-err" : undefined}
           onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-          onKeyDown={(e) => e.key === "Enter" && onAdd()}
         />
         {attempted && errs.name && <span id="goal-draft-name-err" className="field__error">{errs.name}</span>}
       </div>
@@ -88,6 +89,7 @@ export function AddGoalForm({
           className="input input--mono"
           type="text"
           inputMode="decimal"
+          enterKeyHint="done"
           placeholder="0"
           value={draft.targetAmount || ""}
           aria-invalid={attempted && !!errs.target}
@@ -98,14 +100,13 @@ export function AddGoalForm({
               targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0),
             }))
           }
-          onKeyDown={(e) => e.key === "Enter" && onAdd()}
           pattern="[0-9.]*"
         />
         {attempted && errs.target && <span id="goal-draft-target-err" className="field__error">{errs.target}</span>}
       </div>
-      <button className="btn" type="button" onClick={onAdd}>
+      <button className="btn" type="submit">
         Add goal
       </button>
-    </div>
+    </Form>
   );
 }

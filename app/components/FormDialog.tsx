@@ -1,16 +1,15 @@
 "use client";
 
 import { useRef, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { Dialog } from "@base-ui/react/dialog";
 import { IconX } from "@tabler/icons-react";
-import { BottomSheet } from "./BottomSheet";
+import { BottomSheet, modalInitialFocus } from "./BottomSheet";
 import { useIsMobile } from "../lib/useIsMobile";
-import { useModal } from "../lib/useModal";
 
 /**
- * The container every "+ Add X" button opens: a centered dialog on desktop, the
- * BottomSheet on mobile, both portalled to <body>. Both close on Escape and overlay click,
- * focus the first field on open (the panel on touch screens), and return focus to the button
+ * The container every "+ Add X" button opens: a centered Base UI Dialog on desktop, the BottomSheet
+ * (Base UI Drawer) on mobile, both portalled to <body>. Both close on Escape and backdrop click, trap
+ * focus, focus the first field on open (the panel on touch screens), and return focus to the button
  * that opened them.
  */
 export function FormDialog({
@@ -50,31 +49,36 @@ function CenteredDialog({
   onClose: () => void;
   children: ReactNode;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useModal(open, onClose, panelRef);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
-  if (!open) return null;
-
-  return createPortal(
-    <div
-      className="dialog-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
       }}
     >
-      <div className="dialog dialog--form" ref={panelRef} tabIndex={-1}>
-        <div className="dialog__head">
-          <h3 className="dialog__title">{title}</h3>
-          <button className="btn btn--icon" type="button" onClick={onClose} aria-label="Close">
-            <IconX size={16} aria-hidden="true" />
-          </button>
-        </div>
-        <div className="dialog__body">{children}</div>
-      </div>
-    </div>,
-    document.body,
+      <Dialog.Portal>
+        <Dialog.Backdrop className="dialog-overlay" />
+        <Dialog.Viewport className="dialog-viewport">
+          <Dialog.Popup
+            ref={popupRef}
+            className="dialog dialog--form"
+            initialFocus={modalInitialFocus(popupRef, bodyRef)}
+          >
+            <div className="dialog__head">
+              <Dialog.Title className="dialog__title" render={<h3 />}>{title}</Dialog.Title>
+              <Dialog.Close className="btn btn--icon" aria-label="Close">
+                <IconX size={16} aria-hidden="true" />
+              </Dialog.Close>
+            </div>
+            <div className="dialog__body" ref={bodyRef}>
+              {children}
+            </div>
+          </Dialog.Popup>
+        </Dialog.Viewport>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

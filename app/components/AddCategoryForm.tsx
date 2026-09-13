@@ -2,6 +2,7 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import type { BudgetCategory } from "../lib/storage";
+import { Form } from "./Form";
 
 export type CategoryFormDraft = Omit<BudgetCategory, "id">;
 
@@ -24,13 +25,14 @@ export function AddCategoryForm({
   const nameError = !draft.name.trim() ? "Required" : null;
   const valueError = draft.value <= 0 ? "Must be more than 0" : null;
   return (
-    <div className={`inline-form${inSheet ? " inline-form--sheet" : ""}`}>
+    <Form className={`inline-form${inSheet ? " inline-form--sheet" : ""}`} onSubmit={onAdd}>
       <div className={`field${attempted && nameError ? " field--has-error" : ""}`}>
         <label className="field__label" htmlFor="cat-draft-name">Name</label>
         <input
           id="cat-draft-name"
           className="input"
           placeholder="e.g. Travel fund"
+          enterKeyHint="next"
           value={draft.name}
           aria-invalid={attempted && !!nameError}
           aria-describedby={attempted && nameError ? "cat-draft-name-err" : undefined}
@@ -59,6 +61,7 @@ export function AddCategoryForm({
           className="input input--mono"
           type="text"
           inputMode="decimal"
+          enterKeyHint="done"
           placeholder="0"
           value={draft.value || ""}
           aria-invalid={attempted && !!valueError}
@@ -72,9 +75,9 @@ export function AddCategoryForm({
           <span id="cat-draft-value-err" className="field__error">{valueError}</span>
         )}
       </div>
-      <button className="btn" type="button" onClick={onAdd}>
+      <button className="btn" type="submit">
         Add category
       </button>
-    </div>
+    </Form>
   );
 }

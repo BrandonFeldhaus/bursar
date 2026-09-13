@@ -19,6 +19,7 @@ import { SavedIndicator, useSavedIndicator } from "../components/SavedIndicator"
 import { AddBillForm, billDraftErrors, emptyBillDraft, expenseFromDraft, type BillFormDraft } from "../components/AddBillForm";
 import { Hint, dismissHint, type HintId } from "../components/Hint";
 import { FormDialog } from "../components/FormDialog";
+import { advanceOnEnter } from "../components/Form";
 import { moneyFmt, moneyShort } from "../lib/currency";
 
 function BillsCalendar({ state, month }: { state: BudgetState; month: string }) {
@@ -363,9 +364,9 @@ export default function ExpensesPage() {
             </thead>
             <tbody>
               {state.recurringExpenses.map((exp) => (
-                <tr key={exp.id}>
+                <tr key={exp.id} onKeyDown={advanceOnEnter}>
                   <td data-label="Name">
-                    <input className="input" value={exp.name} onChange={(e) => update(exp.id, { name: e.target.value })} aria-label="Bill name" />
+                    <input className="input" value={exp.name} enterKeyHint="next" onChange={(e) => update(exp.id, { name: e.target.value })} aria-label="Bill name" />
                   </td>
                   <td className="text-right mono" data-label="Amount">
                     <input
@@ -373,6 +374,7 @@ export default function ExpensesPage() {
                       type="text"
                       inputMode="decimal"
                       pattern="[0-9.]*"
+                      enterKeyHint="next"
                       value={exp.amount}
                       aria-label="Bill amount"
                       onChange={(e) =>
@@ -397,6 +399,7 @@ export default function ExpensesPage() {
                       type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
+                      enterKeyHint={exp.cadence === "annual" ? "next" : "done"}
                       placeholder="1"
                       value={exp.dueDay || ""}
                       aria-label="Due day"

@@ -2,6 +2,7 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { newId, type RecurringExpense } from "../lib/storage";
+import { Form } from "./Form";
 
 export type BillFormDraft = {
   name: string;
@@ -67,6 +68,7 @@ export function AddBillForm({
       type="text"
       inputMode="numeric"
       pattern="[0-9]*"
+      enterKeyHint={draft.cadence === "annual" ? "next" : "done"}
       placeholder="1"
       value={draft.dueDay || ""}
       onChange={(e) => {
@@ -88,13 +90,14 @@ export function AddBillForm({
     </select>
   );
   return (
-    <div className={`inline-form${cols}${inSheet ? " inline-form--sheet" : ""}`}>
+    <Form className={`inline-form${cols}${inSheet ? " inline-form--sheet" : ""}`} onSubmit={onAdd}>
       <div className={`field${attempted && errs.name ? " field--has-error" : ""}`}>
         <label className="field__label" htmlFor="bill-draft-name">Name</label>
         <input
           id="bill-draft-name"
           className="input"
           placeholder="e.g. Internet"
+          enterKeyHint="next"
           value={draft.name}
           aria-invalid={attempted && !!errs.name}
           aria-describedby={attempted && errs.name ? "bill-draft-name-err" : undefined}
@@ -112,6 +115,7 @@ export function AddBillForm({
           type="text"
           inputMode="decimal"
           pattern="[0-9.]*"
+          enterKeyHint="next"
           placeholder="0"
           value={draft.amount}
           aria-invalid={attempted && !!errs.amount}
@@ -160,9 +164,9 @@ export function AddBillForm({
           )}
         </>
       )}
-      <button className="btn" type="button" onClick={onAdd}>
+      <button className="btn" type="submit">
         Add bill
       </button>
-    </div>
+    </Form>
   );
 }

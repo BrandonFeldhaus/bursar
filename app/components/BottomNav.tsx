@@ -78,29 +78,27 @@ export function BottomNav() {
         </li>
       </ul>
 
-      {moreOpen && (
-        <BottomSheet open title="More" onClose={() => setMoreOpen(false)}>
-          <ul className="more-sheet__list">
-            {more.map((item) => {
-              const Icon = item.Icon;
-              const active = isActive(item.href);
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={`more-sheet__link${active ? " more-sheet__link--active" : ""}`}
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => setMoreOpen(false)}
-                  >
-                    <Icon size={20} stroke={1.8} aria-hidden="true" />
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </BottomSheet>
-      )}
+      <BottomSheet open={moreOpen} title="More" onClose={() => setMoreOpen(false)}>
+        <ul className="more-sheet__list">
+          {more.map((item) => {
+            const Icon = item.Icon;
+            const active = isActive(item.href);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={`more-sheet__link${active ? " more-sheet__link--active" : ""}`}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setMoreOpen(false)}
+                >
+                  <Icon size={20} stroke={1.8} aria-hidden="true" />
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </BottomSheet>
     </nav>
   );
 }
