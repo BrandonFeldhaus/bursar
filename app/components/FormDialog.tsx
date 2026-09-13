@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { IconX } from "@tabler/icons-react";
 import { BottomSheet } from "./BottomSheet";
 import { useIsMobile } from "../lib/useIsMobile";
@@ -8,8 +9,9 @@ import { useModal } from "../lib/useModal";
 
 /**
  * The container every "+ Add X" button opens: a centered dialog on desktop, the
- * BottomSheet on mobile. Both close on Escape and overlay click, focus the first
- * field on open (the panel on touch screens), and return focus to the button that opened them.
+ * BottomSheet on mobile, both portalled to <body>. Both close on Escape and overlay click,
+ * focus the first field on open (the panel on touch screens), and return focus to the button
+ * that opened them.
  */
 export function FormDialog({
   open,
@@ -53,7 +55,7 @@ function CenteredDialog({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       className="dialog-overlay"
       role="dialog"
@@ -72,6 +74,7 @@ function CenteredDialog({
         </div>
         <div className="dialog__body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

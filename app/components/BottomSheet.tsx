@@ -1,14 +1,16 @@
 "use client";
 
 import { useRef } from "react";
+import { createPortal } from "react-dom";
 import { IconX } from "@tabler/icons-react";
 import { useModal } from "../lib/useModal";
 import { useSheetKeyboard } from "../lib/useSheetKeyboard";
 
 /**
- * Mobile slide-up drawer. Escape and the overlay close it; focus moves in (the panel itself on touch
- * screens, so the keyboard doesn't open over it) and back to the opener on close. When the keyboard
- * does open, the sheet pins itself above it (useSheetKeyboard).
+ * Mobile slide-up drawer, portalled to <body> so no ancestor's transform or backdrop-filter can
+ * capture its fixed overlay. Escape and the overlay close it; focus moves in (the panel itself on
+ * touch screens, so the keyboard doesn't open over it) and back to the opener on close. When the
+ * keyboard does open, the sheet pins itself above it (useSheetKeyboard).
  */
 export function BottomSheet({
   open,
@@ -27,7 +29,7 @@ export function BottomSheet({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       className="dialog-overlay dialog-overlay--sheet"
       role="dialog"
@@ -51,6 +53,7 @@ export function BottomSheet({
         </div>
         <div className="bottom-sheet__body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -19,6 +19,7 @@ export function useModal(open: boolean, onClose: () => void, panelRef: RefObject
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     const previousScrollY = window.scrollY;
+    const previousPath = location.pathname;
     document.body.style.overflow = "hidden";
 
     // An explicit [data-autofocus] wins. With a mouse or keyboard the first field comes next, then the
@@ -53,9 +54,8 @@ export function useModal(open: boolean, onClose: () => void, panelRef: RefObject
     }
     function onTouchMove(e: TouchEvent) {
       if (e.touches.length > 1) return; // pinch zoom
-      const t = e.target;
-      // Dragging a selection's handles inside the field being typed in.
-      if (t === document.activeElement && opensKeyboard(t) && hasSelectedRange(t)) return;
+      // Placing the caret or dragging a selection inside the field being typed in.
+      if (e.target === document.activeElement && opensKeyboard(e.target)) return;
       if (!scroller) e.preventDefault();
     }
     overlay?.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -66,8 +66,11 @@ export function useModal(open: boolean, onClose: () => void, panelRef: RefObject
       overlay?.removeEventListener("touchstart", onTouchStart);
       overlay?.removeEventListener("touchmove", onTouchMove);
       document.body.style.overflow = previousOverflow;
-      // iOS scrolls the page behind to "reveal" a focused field even though it can't be seen; put it back.
-      if (window.scrollY !== previousScrollY) window.scrollTo(window.scrollX, previousScrollY);
+      // iOS scrolls the page behind to "reveal" a focused field even though it can't be seen; put it back
+      // (unless the sheet closed because a link in it navigated, in which case the new page owns the scroll).
+      if (location.pathname === previousPath && window.scrollY !== previousScrollY) {
+        window.scrollTo(window.scrollX, previousScrollY);
+      }
       opener?.focus({ preventScroll: true });
     };
   }, [open, panelRef]);
@@ -82,13 +85,4 @@ function scrollableAncestor(el: Element | null, boundary: Element | null | undef
     if (y || x) return node;
   }
   return null;
-}
-
-function hasSelectedRange(el: EventTarget | null) {
-  if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return false;
-  try {
-    return el.selectionStart !== null && el.selectionEnd !== null && el.selectionStart < el.selectionEnd;
-  } catch {
-    return false; // date inputs throw on selectionStart
-  }
 }

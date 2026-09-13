@@ -3116,19 +3116,20 @@ select {
 /* The panel takes focus on touch screens instead of a field (useModal) */
 .bottom-sheet:focus { outline: none; }
 
-/* Keyboard up (useSheetKeyboard): the sheet pins full height and stays pinned until it closes,
-   so its fields hold still while the keyboard hides for a picker and comes back. The body
-   scrolls between the head and --sheet-inset (the height the keyboard covers);
-   --sheet-reserve is spare scroll room at its end so a hiding keyboard never scrolls the form. */
+/* A field was tapped (useSheetKeyboard): the sheet pins full height and stays pinned until it
+   closes, so its fields hold still while the keyboard hides for a picker and comes back. The body
+   scrolls between the head and --sheet-inset (the height the keyboard covers); --sheet-reserve is
+   spare scroll room at its end so a hiding keyboard never scrolls the form; --sheet-top follows
+   the browser if it pans the view to reveal a field, so the sheet stays on screen. */
 .bottom-sheet--keyboard {
   position: absolute;
-  inset: var(--space-3) 0 0;
+  inset: calc(var(--sheet-top, 0px) + var(--space-3)) 0 0;
   max-height: none;
-  padding-bottom: max(var(--sheet-inset), env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(var(--sheet-inset, 0px), env(safe-area-inset-bottom, 0px));
 }
 .bottom-sheet--keyboard .bottom-sheet__body {
   flex: 1 1 auto;
-  padding-bottom: calc(18px + var(--sheet-reserve));
+  padding-bottom: calc(18px + var(--sheet-reserve, 0px));
 }
 
 /* Add forms inside FormDialog / BottomSheet lose their sunk-paper chrome and run two
