@@ -5,6 +5,14 @@ All notable changes to Bursar will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4] - 2026-09-13
+
+### Fixed
+
+- **Bills no longer show $0.00 when funding a goal.** A bill used to read $0.00 in the funding picker and on its chip unless it was due in the current paycheck. Bills now show their amount as it appears on the Bills page (for example $1,300.00/mo or $1,200.00/yr).
+- **"≈ per paycheck" and "paychecks to go" allow for bills that don't come every paycheck.** The estimate used only the current paycheck, so a monthly bill counted in full or not at all. Each funding source is now averaged over a year of paychecks: $1,300 rent with 26 paychecks a year adds $600 per paycheck. Ticking a goal on the Overview still counts a bill only in the period it's due.
+- **Funding sources can be removed from the picker.** Choosing a checked source again removes it, the same way it was added.
+
 ## [1.2.3] - 2026-09-12
 
 ### Fixed

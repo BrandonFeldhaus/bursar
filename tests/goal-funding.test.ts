@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { computeAllocations } from "../app/lib/allocations";
 import { paycheckPeriodsForMonth } from "../app/lib/month";
 import {
-  currentPeriod,
+  fundingAmountLabel,
   fundingCandidates,
   goalFundingSources,
   goalFundingTotal,
@@ -10,7 +10,7 @@ import {
   sourceAmount,
 } from "../app/lib/goalFunding";
 import type { Goal } from "../app/lib/budgetStorage";
-import { fixedCat, makeState, monthlyExpense, percentCat, semiIncome } from "./helpers";
+import { annualExpense, biwIncome, fixedCat, makeState, monthlyExpense, percentCat, semiIncome } from "./helpers";
 
 // Semi-monthly $3,000 on May 1 and May 15 2026; rent is due on the 5th, gym on the 20th.
 const state = makeState(
@@ -67,15 +67,41 @@ describe("goalFunding — per-source amounts", () => {
 });
 
 describe("goalFunding — candidates and selected sources", () => {
-  const candidates = fundingCandidates(firstAllocs, first.bills, state.recurringExpenses);
+  const candidates = fundingCandidates(state, "2026-05");
 
-  it("lists every category and every bill with its amount for the period", () => {
-    expect(candidates.map((c) => `${c.kind}:${c.id}=${c.amount}`)).to.deep.equal([
-      "category:savings=320",
+  it("averages every category and bill per paycheck over a year of periods", () => {
+    // Semi-monthly pay → 24 periods. Savings is 320 in the rent period and 20% of (3000 − 40 − 100) = 572
+    // in the other; rent and gym each land once a month, so they're spread across two paychecks.
+    expect(candidates.map((c) => `${c.kind}:${c.id}=${c.perPaycheck}`)).to.deep.equal([
+      "category:savings=446",
       "category:gas=100",
-      "bill:rent=1300",
-      "bill:gym=0",
+      "bill:rent=650",
+      "bill:gym=20",
     ]);
+  });
+
+  it("gives no bill a zero amount just because it isn't due in the current period", () => {
+    expect(candidates.filter((c) => c.kind === "bill").every((c) => c.perPaycheck > 0)).to.equal(true);
+  });
+
+  it("spreads a monthly bill across every paycheck when there are 26 a year", () => {
+    const biweekly = makeState([biwIncome("b", "Job", 2000, "2026-05-08")], [monthlyExpense("rent", "Rent", 1300, 5)]);
+    const [rent] = fundingCandidates(biweekly, "2026-05");
+    expect(rent.perPaycheck).to.be.closeTo((1300 * 12) / 26, 1e-9);
+  });
+
+  it("spreads an annual bill across the year's paychecks", () => {
+    const annual = makeState([semiIncome("inc", "Salary", 3000)], [annualExpense("ins", "Insurance", 1200, 10, 3)]);
+    const [ins] = fundingCandidates(annual, "2026-05");
+    expect(ins.perPaycheck).to.be.closeTo(1200 / 24, 1e-9);
+    expect(ins.bill).to.deep.equal({ amount: 1200, cadence: "annual" });
+  });
+
+  it("labels a bill as billed and a category per paycheck", () => {
+    const byId = (id: string) => candidates.find((c) => c.id === id)!;
+    expect(fundingAmountLabel(byId("rent"))).to.equal("$1,300.00/mo");
+    expect(fundingAmountLabel(byId("savings"))).to.equal("$446.00");
+    expect(fundingAmountLabel({ kind: "bill", id: "x", name: "X", perPaycheck: 50, bill: { amount: 1200, cadence: "annual" } })).to.equal("$1,200.00/yr");
   });
 
   it("returns the goal's linked sources, categories first, and drops missing ids", () => {
@@ -94,21 +120,5 @@ describe("paychecksToGo", () => {
     expect(paychecksToGo(900, 0)).to.equal(null);
     expect(paychecksToGo(0, 250)).to.equal(null);
     expect(paychecksToGo(-5, 250)).to.equal(null);
-  });
-});
-
-describe("currentPeriod", () => {
-  it("returns the period of the current month that contains today", () => {
-    const p = currentPeriod(state, new Date(2026, 4, 20));
-    expect(p?.monthKey).to.equal("2026-05");
-    expect(p?.key).to.equal("second");
-  });
-
-  it("falls back to last month's last period before this month's first payday", () => {
-    const biweekly = makeState([{ id: "b", name: "Job", amount: 1000, cadence: "monthly", payCycle: "biweekly", lastPaycheckDate: "2026-05-08" }]);
-    // June 2026 paydays: 5th and 19th → June 3 still belongs to May's last period.
-    const p = currentPeriod(biweekly, new Date(2026, 5, 3));
-    expect(p?.monthKey).to.equal("2026-05");
-    expect(p?.index).to.equal(p?.total);
   });
 });
