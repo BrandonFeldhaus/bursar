@@ -5,6 +5,12 @@ All notable changes to Bursar will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-09-14
+
+### Fixed
+
+- **The GitHub Pages build installs again.** 1.3.0 added `@base-ui/react` to `package.json` without updating `pnpm-lock.yaml`, so the build failed at `pnpm install`. The lockfile now includes Base UI and its dependencies.
+
 ## [1.3.0] - 2026-09-13
 
 Sheets and dialogs are rebuilt on [Base UI](https://base-ui.com) (`@base-ui/react`), which now handles focus, scroll locking, Escape and the backdrop. Stored data is unchanged.
