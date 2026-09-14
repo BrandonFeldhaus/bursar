@@ -656,7 +656,7 @@ export default function Home() {
   const firstRunBody = (
     <div className="period-empty">
       <p className="period-empty__text">
-        Bursar splits each month by your paydays. Add your first income to see your periods.
+        Add your income and Bursar will split each month into paychecks.
       </p>
       <div>
         <button type="button" className="btn btn--lg" onClick={() => setDialog("source")}>
