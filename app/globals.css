@@ -97,6 +97,7 @@
 
 html {
   min-height: 100%;
+  background: var(--paper-0); /* overscroll and the installed app's status bar area */
 }
 
 body {
@@ -168,7 +169,7 @@ textarea {
   position: sticky;
   top: 0;
   z-index: 40;
-  padding: 14px 0 18px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 0 18px;
   background: linear-gradient(
     to bottom,
     rgba(246, 239, 225, 0.96) 0,
@@ -1062,7 +1063,12 @@ select {
 @media (width <= 900px) {
   :root {
     --sheet-width: calc(100vw - 24px);
-    --sheet-left: 12px;
+    /* Clears the notch in landscape; the insets are 0 outside the installed app. */
+    --sheet-left: max(12px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+  }
+
+  .footer {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
   .dashboardStats {

@@ -5,6 +5,17 @@ All notable changes to Bursar will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1]
+
+### Added
+
+- **Add Bursar to your home screen.** On iPhone, Share → Add to Home Screen now installs Bursar as an app with its own icon (the green B seal). It opens full screen with a paper-coloured status bar, and the bottom navigation sits clear of the home indicator. Android and desktop Chrome can install it too.
+- **Works offline.** Once opened, every page is saved on the device, so the app opens and works with no connection. A new version is picked up the next time the app is fully closed and reopened.
+
+### Note
+
+- On iPhone the home-screen app keeps its own data, separate from Safari. To bring your ledger across, use Settings → Export in Safari, then Import in the installed app.
+
 ## [1.3.1] - 2026-09-14
 
 ### Fixed

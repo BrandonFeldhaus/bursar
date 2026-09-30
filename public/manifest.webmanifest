@@ -1,0 +1,16 @@
+{
+  "name": "Bursar",
+  "short_name": "Bursar",
+  "description": "A paycheck-period budgeting app for income, bills, budget, and goals. Data stays in your browser.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6efe1",
+  "theme_color": "#f6efe1",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

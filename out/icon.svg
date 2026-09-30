@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <!-- Paper background -->
+  <rect width="16" height="16" fill="#fbf6e9"/>
+  <!-- Outer seal ring (money green) -->
+  <circle cx="8" cy="8" r="6.6" fill="#1f6b3a"/>
+  <!-- Inner ring highlight -->
+  <circle cx="8" cy="8" r="5.6" fill="none" stroke="#fbf6e9" stroke-width="0.35" opacity="0.7"/>
+  <!-- B monogram in cream, like a stamped seal -->
+  <text x="8" y="11.6" font-family="Georgia, 'Times New Roman', serif" font-size="9" font-weight="700" fill="#fbf6e9" text-anchor="middle">B</text>
+</svg>
