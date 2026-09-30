@@ -6,7 +6,7 @@ A paycheck-period budgeting app built with Next.js 15 (static export). All data 
 
 ```bash
 npm run dev      # dev server (Turbopack)
-npm run build    # static export → out/
+npm run build    # static export → out/, then scripts/build-sw.ts writes out/sw.js
 npm test         # Mocha test suite (tsx/cjs loader)
 npx tsc --noEmit # type-check only
 ```
@@ -28,7 +28,14 @@ Tests use Mocha + Chai. The test runner is configured in `.mocharc.js` to pick u
 There is no setup wizard and no route gate. A store with no incomes is "new": the Overview teaches through empty states (step-by-step in the first period card) and a demo mode. `meta.onboardingComplete` is still stored for import compatibility but nothing reads it for routing.
 
 ### Layout shell (`app/layout.tsx`)
-`SiteHeader` (which renders `DemoBanner` inside the sticky header) → `<main>{children}</main>` → footer → `BottomNav` (mobile only). Every page renders its own loading skeleton behind `useHydrated`, so the server HTML and the first client frame always match.
+`SiteHeader` (which renders `DemoBanner` inside the sticky header) → `<main>{children}</main>` → footer → `BottomNav` (mobile only) → `ServiceWorkerRegister`. Every page renders its own loading skeleton behind `useHydrated`, so the server HTML and the first client frame always match.
+
+### Installable app (PWA)
+- **Head** (`layout.tsx`): `viewport` exports `viewportFit: "cover"` (without it every `env(safe-area-inset-*)` is 0 on iPhone) and `themeColor` `#f6efe1` (`--paper-0`); `metadata.appleWebApp` is `capable`, status bar `default` (`black-translucent` would draw white clock text over cream). `metadata.manifest` links `public/manifest.webmanifest` with the base path prepended by hand — `app/manifest.ts` was tried and Next drops `basePath` from its `<link>`. The manifest's URLs (`start_url`, `scope`, `id`, icons) are relative to itself, so it works at `/` and under `/bursar`.
+- **Icons**: `app/icon.svg` (the B seal; Next only links `icon.*` / `favicon.ico`, so the old `favicon.svg` was never used), `app/apple-icon.png` (180×180, opaque — iOS turns transparency black, seal at 80%), `public/icons/icon-192/512.png` (`any`) and `icon-maskable-512.png` (seal at 80% for the maskable safe zone). All rendered from the SVG with headless Chromium; re-render if the seal changes.
+- **Safe areas** (`globals.css`, no `display-mode` query — the insets are 0 in a browser tab): `.siteHeader` top padding adds `safe-area-inset-top`, `--sheet-left` at ≤900px is `max(12px, inset-left, inset-right)` (landscape notch), `.footer` at ≤900px adds `inset-bottom` so it clears the taller nav; `.bottomNav`, `.bottom-sheet` and the undo toast already pad for the home indicator. `html` has the paper background for overscroll.
+- **Service worker**: `scripts/sw.template.js` → `out/sw.js` via `scripts/build-sw.ts` (run by `npm run build`; a `postbuild` hook would not run under pnpm 10 on CI). The script lists every file in `out/` and stamps a content hash as the cache version. The worker pre-caches that list, serves app files cache-first (query ignored for Next's `?_rsc=` prefetches; `/bursar/budget` → `budget.html`), falls back to `index.html` for an unknown page offline, and caches Google Fonts on first use in `bursar-fonts`. No `skipWaiting`: a deploy takes over once every window of the app has closed, so an open page never loses its chunks. `ServiceWorkerRegister` registers `${NEXT_PUBLIC_BASE_PATH}/sw.js` in production only (`next.config.ts` maps `PAGES_BASE_PATH` to it); the dev server has no worker.
+- **iOS storage**: a home-screen app has its own storage, separate from Safari — moving a ledger across means Export in Safari, Import in the app.
 
 ### Navigation
 Desktop top nav (`SiteHeader`): Overview, Expenses, Budget, Goals, Income, Settings. Mobile `BottomNav` (≤900px) has five items — Overview, Expenses, Budget, Goals, **More** — where More is a button that opens a `BottomSheet` listing Income and Settings (`.more-sheet__list`); it closes on route change and reads as active while either of those pages is open. Labels are sentence case at 13px so all five fit at 390px.
@@ -151,6 +158,7 @@ tests/
   month-view.test.ts         # viewStateForMonth, snapshotForMonth, upsertSnapshot, backfillSnapshots,
                              # saveState upserting the current month (window/localStorage stubbed), legacy snapshots
   sample-data.test.ts        # meta.hints / meta.demo defaults, sampleData() round-trips through normalizeParsed
+  build-sw.test.ts           # precacheFiles, buildVersion, renderServiceWorker (scripts/build-sw.ts)
   helpers.ts                 # semiIncome(), biwIncome(), monthlyExpense(), annualExpense(), etc.
   fixtures/                  # scenario JSON files (A–I) for import testing
 ```
