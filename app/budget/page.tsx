@@ -13,6 +13,7 @@ import { AddCategoryForm, emptyCategoryDraft, type CategoryFormDraft } from "../
 import { FormDialog } from "../components/FormDialog";
 import { Hint, dismissHint, type HintId } from "../components/Hint";
 import { advanceOnEnter } from "../components/Form";
+import { InlineAmountInput } from "../components/InlineAmountInput";
 
 function AllocationRing({
   segments,
@@ -300,17 +301,12 @@ export default function BudgetPage() {
                       </select>
                     </td>
                     <td className="text-right mono" data-label="Value">
-                      <input
-                        className="input input--mono"
-                        type="text"
-                        inputMode="decimal"
-                        enterKeyHint="done"
+                      <InlineAmountInput
                         value={c.value}
-                        aria-label="Category value"
-                        onChange={(e) =>
-                          update(c.id, { value: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) })
-                        }
-                        pattern="[0-9.]*"
+                        format={c.mode === "percent" ? (n) => `${n}%` : moneyFmt}
+                        enterKeyHint="done"
+                        aria-label={c.mode === "percent" ? "Category percent" : "Category amount"}
+                        onCommit={(value) => { if (value !== null) update(c.id, { value }); }}
                       />
                     </td>
                     <td className="text-tight">

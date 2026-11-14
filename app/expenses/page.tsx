@@ -20,6 +20,7 @@ import { AddBillForm, billDraftErrors, emptyBillDraft, expenseFromDraft, type Bi
 import { Hint, dismissHint, type HintId } from "../components/Hint";
 import { FormDialog } from "../components/FormDialog";
 import { advanceOnEnter } from "../components/Form";
+import { InlineAmountInput } from "../components/InlineAmountInput";
 import { moneyFmt, moneyShort } from "../lib/currency";
 
 function BillsCalendar({ state, month }: { state: BudgetState; month: string }) {
@@ -369,17 +370,10 @@ export default function ExpensesPage() {
                     <input className="input" value={exp.name} enterKeyHint="next" onChange={(e) => update(exp.id, { name: e.target.value })} aria-label="Bill name" />
                   </td>
                   <td className="text-right mono" data-label="Amount">
-                    <input
-                      className="input input--mono"
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9.]*"
-                      enterKeyHint="next"
+                    <InlineAmountInput
                       value={exp.amount}
                       aria-label="Bill amount"
-                      onChange={(e) =>
-                        update(exp.id, { amount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) })
-                      }
+                      onCommit={(amount) => { if (amount !== null) update(exp.id, { amount }); }}
                     />
                   </td>
                   <td data-label="Repeats">
@@ -394,21 +388,15 @@ export default function ExpensesPage() {
                     </select>
                   </td>
                   <td data-label="Due day">
-                    <input
-                      className="input input--mono"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
+                    <InlineAmountInput
+                      integer
+                      min={1}
+                      max={31}
+                      format={String}
+                      value={exp.dueDay || 1}
                       enterKeyHint={exp.cadence === "annual" ? "next" : "done"}
-                      placeholder="1"
-                      value={exp.dueDay || ""}
                       aria-label="Due day"
-                      onChange={(e) => {
-                        const digits = e.target.value.replace(/\D/g, "").slice(0, 2);
-                        const n = digits === "" ? 0 : Math.min(31, Number(digits));
-                        update(exp.id, { dueDay: n });
-                      }}
-                      onBlur={() => { if (!exp.dueDay || exp.dueDay < 1) update(exp.id, { dueDay: 1 }); }}
+                      onCommit={(dueDay) => { if (dueDay !== null) update(exp.id, { dueDay }); }}
                     />
                   </td>
                   <td data-label="Annual month">

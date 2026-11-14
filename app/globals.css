@@ -246,7 +246,9 @@ h3,
 .month-summary__op,
 .funding-chip__amount,
 .funding-picker__amount,
-.funding-total__amount {
+.funding-total__amount,
+.recent-item__diff,
+.income-average__amount {
   font-family: var(--font-numerals);
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
@@ -1370,6 +1372,24 @@ select {
   margin: 0;
 }
 
+/* Income table: "Last N paychecks averaged $X · Use this" under an income's amount */
+.income-average {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-2);
+  margin: 0;
+  font-size: var(--text-1);
+  line-height: var(--leading-1);
+  color: var(--ink-3);
+  text-align: left;
+}
+.income-average .text-link-btn { font-size: var(--text-1); }
+
+@media (width <= 600px) {
+  .income-average .text-link-btn { min-height: 44px; }
+}
+
 /* Two controls side by side inside one field (due day + annual month) */
 .field__row { display: flex; gap: 6px; align-items: center; }
 .input.input--day { width: 52px; flex-shrink: 0; }
@@ -1543,7 +1563,6 @@ select {
 
 .ledger-table .input,
 .ledger-table .select {
-  border-bottom: 0;
   height: 28px;
   min-height: 28px;
   font-size: var(--text-2);
@@ -1561,10 +1580,33 @@ select {
   line-height: 1;
 }
 
+/* =========================================================
+   INLINE EDIT — one look for every in-place edit: table rows on
+   every page and the Overview's paychecks. A dashed rule says
+   "editable"; it turns solid ink on focus. Amounts use the shared
+   InlineAmountInput (components/InlineAmountInput.tsx), which adds
+   .input--inline and reads as formatted money until focused.
+   ========================================================= */
+
+.input.input--inline,
+.ledger-table .input,
+.ledger-table .select {
+  border-bottom: 1.5px dashed var(--ink-a40);
+}
+
+.input.input--inline:hover,
+.ledger-table .input:hover,
+.ledger-table .select:hover {
+  border-bottom-color: var(--ink-2);
+}
+
+.input.input--inline:focus,
 .ledger-table .input:focus,
 .ledger-table .select:focus {
   border-bottom: 1.5px solid var(--ink-1);
 }
+
+.input.input--inline { font-weight: 500; }
 
 /* Sheet that hosts a ledger table: heading block on top, table flush to the sheet edges */
 .table-card { padding-top: 20px; padding-bottom: var(--space-2); }
@@ -1646,9 +1688,29 @@ select {
 .recent-item__check--nolink { cursor: not-allowed; opacity: 0.4; }
 .recent-item__toggle { cursor: pointer; min-width: 0; }
 
+/* Income tab: a paycheck's amount (an InlineAmountInput — the look comes from INLINE EDIT), sized to its row */
+.input.recent-item__amount {
+  width: 11ch;
+  height: 28px;
+  min-height: 28px;
+  line-height: 28px;
+  padding: 0 2px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* An actual against its estimate: "+$80.00", "−$20.00" (red), "= est." */
+.recent-item__diff {
+  font-size: var(--text-1);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.recent-item__diff--neg { color: var(--signal-red); }
+
 @media (width <= 600px) {
   .recent-item { height: auto; min-height: 44px; }
   .recent-item__check { width: 22px; height: 22px; }
+  .input.recent-item__amount { height: 44px; min-height: 44px; line-height: 44px; }
 }
 
 /* =========================================================

@@ -33,7 +33,15 @@ export type Income = {
   cadence: "monthly" | "annual";
   payCycle: PayCycle;
   lastPaycheckDate: string;
+  /**
+   * Fact: what a paycheck actually came to, keyed by the paycheck's local date ("YYYY-MM-DD") —
+   * not by periodId, because period ordinals shift when income sources are added or removed.
+   * One entry per date, sorted by date. A paycheck with no entry counts at `amount`.
+   */
+  actuals?: PaycheckActual[];
 };
+
+export type PaycheckActual = { date: string; amount: number };
 
 export type BudgetCategory = {
   id: string;
@@ -244,23 +252,40 @@ function normalizeGoals(raw: any[]): Goal[] {
     .filter((g: Goal) => g.name.trim().length > 0);
 }
 
+/** Valid entries only (real "YYYY-MM-DD" date, finite amount ≥ 0); the last entry per date wins; sorted by date. */
+function normalizeActuals(raw: unknown): PaycheckActual[] {
+  if (!Array.isArray(raw)) return [];
+  const byDate = new Map<string, number>();
+  raw.forEach((a: any) => {
+    const date = typeof a?.date === "string" ? a.date : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    const amount = typeof a?.amount === "number" ? a.amount : typeof a?.amount === "string" && a.amount.trim() ? Number(a.amount) : NaN;
+    if (!Number.isFinite(amount) || amount < 0) return;
+    byDate.set(date, amount);
+  });
+  return [...byDate.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([date, amount]) => ({ date, amount }));
+}
+
 function normalizeIncomes(raw: any[]): Income[] {
   return raw.map((inc: any) => ({
     ...inc,
     payCycle: coercePayCycle(inc?.payCycle),
+    actuals: normalizeActuals(inc?.actuals),
   }));
 }
 
 // A snapshot stores DEFINITIONS only (incomes, bills, categories, goal targets and links).
-// FACTS — paidPeriods on an expense, appliedPeriods and manualAdjustments on a goal — are
-// keyed by periodId and always read from live state, so any copies found in a legacy
-// snapshot (written by the old manual Lock/Archive flow) are accepted and then emptied.
+// FACTS — paidPeriods on an expense, appliedPeriods and manualAdjustments on a goal, actuals
+// on an income — are always read from live state, so any copies found in a snapshot
+// (legacy ones were written by the old manual Lock/Archive flow) are accepted and then emptied.
 function normalizeLockedMonths(raw: any[]): LockedMonth[] {
   return raw
     .map((lm: any) => ({
       monthKey: typeof lm?.monthKey === "string" ? lm.monthKey : "",
       lockedAt: typeof lm?.lockedAt === "string" ? lm.lockedAt : new Date().toISOString(),
-      incomes: normalizeIncomes(Array.isArray(lm?.incomes) ? lm.incomes : []),
+      incomes: normalizeIncomes(Array.isArray(lm?.incomes) ? lm.incomes : []).map((inc) => ({ ...inc, actuals: [] })),
       recurringExpenses: normalizeRecurringExpenses(Array.isArray(lm?.recurringExpenses) ? lm.recurringExpenses : [])
         .map((e) => ({ ...e, paidPeriods: [] })),
       budgetCategories: normalizeBudgetCategories({ budgetCategories: lm?.budgetCategories }),

@@ -7,6 +7,7 @@ import type { BudgetState } from "../lib/storage";
 /** One-sentence, dismiss-once hints. Dismissed ids are stored in `meta.hints`. */
 export const HINTS = {
   "overview-goals": "Track a savings or debt goal on the Goals page.",
+  "overview-actuals": "Paycheck different this time? In the Income tab, tap its amount and type what you actually got.",
   income: "Each source's paydays split the month into the paycheck periods on the Overview.",
   expenses: "Each bill lands in the paycheck period that covers its due day; annual bills are spread across the year.",
   budget: "Categories split each period's leftover after bills; fixed amounts come out first.",

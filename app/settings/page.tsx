@@ -33,7 +33,7 @@ export default function SettingsPage() {
     setStatus("Hints will show again on each page.");
   }
 
-  function exportData() {
+  async function exportData() {
     const state = loadState();
     const now = new Date();
     const payload = {
@@ -42,15 +42,33 @@ export default function SettingsPage() {
       exportedAt: now.toISOString(),
       data: state,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
+    const json = JSON.stringify(payload, null, 2);
+    const filename = `bursar-${todayISO()}.json`;
+
+    // Phones (and the installed iPhone app, where a download link is unreliable) get the share
+    // sheet — "Save to Files" on iOS. Desktop keeps a plain download.
+    const file = new File([json], filename, { type: "application/json" });
+    const touch = window.matchMedia("(pointer: coarse)").matches;
+    if (touch && typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: filename });
+        setStatus("Export complete.");
+      } catch (err) {
+        // The user closed the share sheet: nothing was saved, nothing to report.
+        if ((err as Error)?.name !== "AbortError") setStatus("Export didn’t finish. Try again.");
+      }
+      return;
+    }
+
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `bursar-${todayISO()}.json`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    // Revoking straight away can cancel the download before the browser has read the file (iOS).
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
     setStatus("Export complete.");
   }
 

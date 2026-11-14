@@ -16,7 +16,7 @@ export function sampleData(now: Date = new Date()): BudgetState {
     lastPaycheckDate: anchor,
     paycheckAmount: 1800,
     incomes: [
-      { id: "sample-day-job", name: "Day job", amount: 1800, cadence: "monthly", payCycle: "biweekly", lastPaycheckDate: anchor },
+      { id: "sample-day-job", name: "Day job", amount: 1800, cadence: "monthly", payCycle: "biweekly", lastPaycheckDate: anchor, actuals: [] },
     ],
     recurringExpenses: [
       { id: "sample-rent", name: "Rent", amount: 1200, cadence: "monthly", dueDay: 1, dueMonth: undefined, paidPeriods: [] },
