@@ -1,7 +1,7 @@
 import type { BudgetState, Goal, RecurringExpense } from "./budgetStorage";
 import { computeAllocations, type AllocationResult } from "./allocations";
 import { moneyFmt } from "./currency";
-import { paycheckPeriodsForMonth, shiftMonth, type PaycheckPeriod } from "./month";
+import { paycheckPeriodsForMonth, shiftMonth, withoutActuals, type PaycheckPeriod } from "./month";
 
 /**
  * How a goal gets funded. A goal is linked to budget categories and bills
@@ -55,9 +55,11 @@ export function goalFundingTotal(
 /**
  * Every category and bill a goal could be funded by, with what it adds per paycheck on
  * average across the paycheck periods of the twelve months starting at `monthKey`.
+ * Paychecks count at their estimates only, so one month of actuals doesn't skew the figure.
  */
 export function fundingCandidates(state: BudgetState, monthKey: string): FundingSource[] {
-  const periods = Array.from({ length: AVERAGE_MONTHS }, (_, i) => paycheckPeriodsForMonth(state, shiftMonth(monthKey, i)))
+  const planning = withoutActuals(state);
+  const periods = Array.from({ length: AVERAGE_MONTHS }, (_, i) => paycheckPeriodsForMonth(planning, shiftMonth(monthKey, i)))
     .flat()
     .map((p) => ({ allocations: computeAllocations(p.leftover, state.budgetCategories), bills: p.bills }));
   const perPaycheck = (kind: FundingSource["kind"], id: string) =>

@@ -9,8 +9,10 @@ import { currentMonthKey, shiftMonth } from "./month";
  * `lockedMonths` so later edits don't rewrite history.
  *
  * FACTS — `paidPeriods` on an expense, `appliedPeriods` and `manualAdjustments` on a
- * goal — are keyed by periodId, always live, and always editable in every month.
- * Nothing ever locks a fact, and snapshots never carry them.
+ * goal (keyed by periodId), and `actuals` on an income (keyed by paycheck date) — are
+ * always live and always editable in every month. Nothing ever locks a fact, and
+ * snapshots never carry them. A past month therefore shows its snapshot's paycheck
+ * estimate wherever no actual was entered, and the live actual wherever one was.
  */
 
 /** Build a definitions-only snapshot of `state` for `monthKey`. */
@@ -22,7 +24,7 @@ export function snapshotForMonth(
   return {
     monthKey,
     lockedAt,
-    incomes: state.incomes.map((inc) => ({ ...inc })),
+    incomes: state.incomes.map((inc) => ({ ...inc, actuals: [] })),
     recurringExpenses: state.recurringExpenses.map((e) => ({ ...e, paidPeriods: [] })),
     budgetCategories: state.budgetCategories.map((c) => ({ ...c })),
     goals: state.goals.map((g) => ({
@@ -61,8 +63,8 @@ export function backfillSnapshots(state: BudgetState, currentKey: string = curre
  *
  * Current and future months, and past months without a snapshot, render live state.
  * A past month with a snapshot takes its DEFINITIONS from the snapshot but always reads
- * FACTS from live state, matched by id — an expense or goal that no longer exists live
- * gets empty facts.
+ * FACTS from live state, matched by id — an income, expense or goal that no longer exists
+ * live gets empty facts.
  */
 export function viewStateForMonth(
   state: BudgetState,
@@ -73,12 +75,16 @@ export function viewStateForMonth(
   const snapshot = state.lockedMonths.find((lm) => lm.monthKey === monthKey);
   if (!snapshot) return state;
 
+  const liveIncomes = new Map(state.incomes.map((inc) => [inc.id, inc]));
   const liveExpenses = new Map(state.recurringExpenses.map((e) => [e.id, e]));
   const liveGoals = new Map(state.goals.map((g) => [g.id, g]));
 
   return {
     ...state,
-    incomes: snapshot.incomes,
+    incomes: snapshot.incomes.map((inc) => ({
+      ...inc,
+      actuals: liveIncomes.get(inc.id)?.actuals ?? [],
+    })),
     budgetCategories: snapshot.budgetCategories,
     recurringExpenses: snapshot.recurringExpenses.map((e) => ({
       ...e,

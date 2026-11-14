@@ -112,6 +112,21 @@ export function paychecksPerYear(cycle: PayCycle): number {
   return PAYCHECKS_PER_YEAR[cycle] ?? 24;
 }
 
+/**
+ * What one paycheck of `income` on `date` ("YYYY-MM-DD") counts as: the actual entered for that
+ * date if there is one, else the estimate (`income.amount`). Every period total reads income
+ * through this; `monthlyIncomeOf` deliberately doesn't (it is the planning number).
+ */
+export function paycheckAmount(income: Income, date: string): { amount: number; estimated: boolean } {
+  const actual = income.actuals?.find((a) => a.date === date);
+  return actual ? { amount: actual.amount, estimated: false } : { amount: income.amount, estimated: true };
+}
+
+/** The estimate-only version of `state`: every income's actuals dropped. */
+export function withoutActuals(state: BudgetState): BudgetState {
+  return { ...state, incomes: state.incomes.map((inc) => ({ ...inc, actuals: [] })) };
+}
+
 export function monthlyIncomeOf(state: BudgetState): number {
   return state.incomes.reduce((sum, inc) => sum + inc.amount * (paychecksPerYear(inc.payCycle) / 12), 0);
 }
@@ -119,6 +134,38 @@ export function monthlyIncomeOf(state: BudgetState): number {
 // ─── Paycheck-based periods ──────────────────────────────────────────────────
 
 const PERIOD_ORDINALS = ["first", "second", "third", "fourth", "fifth"] as const;
+
+/** One paycheck inside a period. `amount` is what counts (actual or estimate); `estimate` is always `income.amount`. */
+export type PeriodIncome = {
+  id: string;
+  incomeId: string;
+  name: string;
+  date: Date;
+  /** The paycheck's local date, "YYYY-MM-DD" — the key its actual is stored under. */
+  dateISO: string;
+  amount: number;
+  estimate: number;
+  /** True when no actual has been entered for this paycheck. */
+  estimated: boolean;
+  /** The source has an actual on any date — it varies, so its unentered paychecks read as estimates. */
+  hasActuals: boolean;
+};
+
+function periodIncome(inc: Income, d: Date): PeriodIncome {
+  const dateISO = toISODate(d);
+  const { amount, estimated } = paycheckAmount(inc, dateISO);
+  return {
+    id: `${inc.id}-${d.getDate()}`,
+    incomeId: inc.id,
+    name: inc.name,
+    date: d,
+    dateISO,
+    amount,
+    estimate: inc.amount,
+    estimated,
+    hasActuals: (inc.actuals ?? []).length > 0,
+  };
+}
 
 export type PaycheckPeriod = {
   key: string;
@@ -142,7 +189,7 @@ export type PaycheckPeriod = {
     cadence: "monthly" | "annual";
     periodId: string;
   }[];
-  incomes: { id: string; name: string; date: Date; amount: number }[];
+  incomes: PeriodIncome[];
   entryCount: number;
   overdue: boolean;
 };
@@ -256,8 +303,9 @@ function buildPeriod(
     incomeDatesForMonth(inc, monthKey).forEach((d) => {
       const day = d.getDate();
       if (day >= startDay && day <= endDay) {
-        totalIncome += inc.amount;
-        incomeItems.push({ id: `${inc.id}-${day}`, name: inc.name, date: d, amount: inc.amount });
+        const item = periodIncome(inc, d);
+        totalIncome += item.amount;
+        incomeItems.push(item);
       }
     });
   });
@@ -320,7 +368,7 @@ export type PeriodSummary = {
     cadence: "monthly" | "annual";
     periodId: string;
   }[];
-  incomes: { id: string; name: string; date: Date; amount: number }[];
+  incomes: PeriodIncome[];
   entryCount: number;
   overdue: boolean;
 };
@@ -350,8 +398,9 @@ export function periodSummariesForMonth(state: BudgetState, monthKey: string): P
       incomeDatesForMonth(inc, monthKey).forEach((d) => {
         const day = d.getDate();
         if (day >= p.start && day <= p.end) {
-          totalIncome += inc.amount;
-          incomeNotes.push({ id: inc.id + "-" + day, name: inc.name, date: d, amount: inc.amount });
+          const item = periodIncome(inc, d);
+          totalIncome += item.amount;
+          incomeNotes.push(item);
         }
       });
     });

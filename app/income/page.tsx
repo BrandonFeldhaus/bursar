@@ -12,6 +12,32 @@ import { moneyFmt } from "../lib/currency";
 import { AddSourceForm, CYCLE_OPTIONS, emptySourceDraft, incomeFromDraft, needsAnchor, sourceDraftErrors, type SourceDraft } from "../components/AddSourceForm";
 import { Hint, dismissHint, type HintId } from "../components/Hint";
 import { advanceOnEnter } from "../components/Form";
+import { InlineAmountInput } from "../components/InlineAmountInput";
+import { recentActualsAverage } from "../lib/paycheckActuals";
+
+/** "Last N paychecks averaged $X · Use this" once an income has enough actuals. Never applied automatically. */
+function RecentAverage({ income, onUse }: { income: Income; onUse: (amount: number) => void }) {
+  const recent = recentActualsAverage(income, todayISO());
+  if (!recent) return null;
+  const differs = Math.abs(recent.average - income.amount) >= 0.005;
+  return (
+    <p className="income-average">
+      <span>
+        Last {recent.count} paychecks averaged <span className="income-average__amount">{moneyFmt(recent.average)}</span>
+      </span>
+      {differs && (
+        <button
+          type="button"
+          className="text-link-btn"
+          aria-label={`Use ${moneyFmt(recent.average)} as the amount per paycheck for ${income.name || "this income"}`}
+          onClick={() => onUse(recent.average)}
+        >
+          Use this
+        </button>
+      )}
+    </p>
+  );
+}
 
 export default function IncomePage() {
   const hydrated = useHydrated();
@@ -203,18 +229,12 @@ export default function IncomePage() {
                     />
                   </td>
                   <td className="text-right mono" data-label="Amount">
-                    <input
-                      className="input input--mono"
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9.]*"
-                      enterKeyHint="next"
+                    <InlineAmountInput
                       value={inc.amount}
                       aria-label="Income amount"
-                      onChange={(e) =>
-                        update(inc.id, { amount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0) })
-                      }
+                      onCommit={(amount) => { if (amount !== null) update(inc.id, { amount }); }}
                     />
+                    <RecentAverage income={inc} onUse={(amount) => update(inc.id, { amount })} />
                   </td>
                   <td data-label="Pay cycle">
                     <select
@@ -269,6 +289,7 @@ export default function IncomePage() {
       <FormDialog open={addOpen} title="Add income" onClose={() => setAddOpen(false)}>
         <AddSourceForm
           inSheet
+          firstIncome={state.incomes.length === 0}
           draft={draft}
           setDraft={setDraft}
           onAdd={() => { if (add()) setAddOpen(false); }}

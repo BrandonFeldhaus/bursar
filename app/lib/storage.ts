@@ -13,13 +13,14 @@ import {
   type LockedMonth,
   type OnboardingExpense,
   type PayCycle,
+  type PaycheckActual,
   type RecurringExpense,
   type Allocation,
 } from "./budgetStorage";
 import { currentMonthKey } from "./month";
 import { upsertSnapshot } from "./monthView";
 
-export type { Allocation, BudgetCategory, BudgetState, Expense, Goal, Income, LockedMonth, OnboardingExpense, PayCycle, RecurringExpense };
+export type { Allocation, BudgetCategory, BudgetState, Expense, Goal, Income, LockedMonth, OnboardingExpense, PayCycle, PaycheckActual, RecurringExpense };
 
 export function defaultState(): BudgetState {
   return defaultBudget();

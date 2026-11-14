@@ -5,6 +5,30 @@ All notable changes to Bursar will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-11-14
+
+### Added
+
+- **Enter what a paycheck actually came to.** On the Overview, every paycheck's amount in the Income tab can be edited in place. Type the real amount and it replaces the estimate for that paycheck only: the period's leftover, its budget split and the cash-flow timeline all follow. Clear the field to go back to the estimate. Each change can be undone from the toast at the bottom of the screen. A paycheck you've entered shows how far it was from the estimate (for example +$80.00, or −$20.00 in red), and once an income has one real amount entered, its other paychecks are marked "est." until you enter them too.
+- **A tip for paychecks that vary.** While you add your first income, the form suggests using a low-typical amount if your pay changes. The Overview then shows a one-line hint on how to enter the real amount, until you've entered one or dismissed it.
+- **A suggested paycheck amount.** Once an income has three or more paychecks entered, the Income page shows what the last ones averaged (up to six), with a Use this button to make it the new amount. Bursar never changes it on its own.
+
+### Changed
+
+- **Every in-place edit looks and works the same.** Amounts in the Income, Bills, Budget and Goals tables now look like the Overview's: they show as money ($1,300.00, or 25% for a percent category) with a dashed underline, and they save when you leave the field. Escape undoes what you typed. Names, dropdowns and dates in those tables get the same dashed underline, so you can see at a glance what can be edited.
+- **Goal contributions follow the real paycheck.** If a goal was already ticked for a paycheck period and you then enter that paycheck's actual amount, the goal's contribution is recalculated from the new leftover. A goal that's ticked can always be unticked, even if the new amount leaves it nothing to fund.
+- **Past months keep their own estimates.** A past month still shows the income amounts it had at the time, but any real paycheck amounts you enter for it show there too.
+- **Export on iPhone uses the share sheet.** Export JSON now opens the share sheet on phones, so you can choose Save to Files. This works in Safari and in the home-screen app.
+
+### Fixed
+
+- **Erasing your data no longer takes you to a different website.** Erase all data (Settings) and Clear and start fresh (the sample-data banner) used to go to the top of the site's domain instead of Bursar's Overview. They now go back to Bursar's empty Overview, in the browser and in the home-screen app.
+- **Amounts in the tables accept cents again.** Typing a decimal point in a table amount (for example 12.50) used to drop the point as soon as you typed it.
+
+### Note
+
+- Monthly income on the Income, Bills and Budget pages, and the "≈ per paycheck" figure on goals, still use the estimates, so one unusual paycheck doesn't change your plan. Existing data and backups load unchanged.
+
 ## [1.4.1]
 
 ### Added

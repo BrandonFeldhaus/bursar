@@ -19,6 +19,7 @@ import { BottomSheet } from "../components/BottomSheet";
 import { FormDialog } from "../components/FormDialog";
 import { FundingPicker } from "../components/FundingPicker";
 import { Form, advanceOnEnter } from "../components/Form";
+import { InlineAmountInput } from "../components/InlineAmountInput";
 import { AddGoalForm, emptyGoalDraft, goalDraftErrors, goalFromDraft, type DraftGoal } from "../components/AddGoalForm";
 import { currentMonthKey, toISODate } from "../lib/month";
 import { formatAdjustmentDate, sortAdjustmentsForDisplay } from "../lib/goalAdjustments";
@@ -575,19 +576,11 @@ export default function GoalsPage() {
                           </select>
                         </td>
                         <td className="text-right mono" data-label="Target">
-                          <input
-                            className="input input--mono"
-                            type="text"
-                            inputMode="decimal"
-                            pattern="[0-9.]*"
+                          <InlineAmountInput
+                            value={g.targetAmount}
                             enterKeyHint="done"
-                            value={g.targetAmount || ""}
                             aria-label="Target amount"
-                            onChange={(e) =>
-                              updateGoal(g.id, {
-                                targetAmount: Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0),
-                              })
-                            }
+                            onCommit={(targetAmount) => { if (targetAmount !== null) updateGoal(g.id, { targetAmount }); }}
                           />
                         </td>
                         <td className="mono" data-label="Applied">{moneyFmt(applied)}</td>

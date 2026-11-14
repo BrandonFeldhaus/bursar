@@ -52,27 +52,33 @@ Empty states live inside the cards, never as separate screens:
 - **Income, no bills** → every card's Bills tab shows "No bills yet…" with an **Add bill** button (`AddBillForm combinedDue` in `FormDialog`).
 - **No budget categories** → the Leftover tab says "Leftover isn't planned yet." with a link to `/budget`.
 - **Bills, no goals** → the first card shows the `overview-goals` hint under its tab row.
+- **Income, no actual entered anywhere yet** → the first card also shows the `overview-actuals` hint (how to enter a real paycheck amount); it stops showing once any actual exists.
 
 Quick add (`.period-card__quick-add`): once the store has incomes / bills, the Income and Bills tabs end with a `+ Add income` / `+ Add bill` text link that opens the same `FormDialog` (one `dialog` state: `"source" | "bill" | null`); it closes only on a successful add. Categories and goals are not added from the Overview: the Leftover and Goals tabs link to their pages, because a goal only does something here once it has funding sources. Editing and deleting always happen on the pages.
+
+**Income tab — actuals** (see *Variable income*): every paycheck row's amount is an `InlineAmountInput` (`clearable`, plus `.recent-item__amount` for row sizing, 44px at ≤600px). Empty clears the actual, untouched does nothing, anything typed is the actual. The row takes `onKeyDown={advanceOnEnter}`, so Enter blurs and therefore saves. Each save shows an `UndoToast` whose Undo restores the previous actual. A row without an actual gets an `est.` badge when its source has an actual on some other date (`PeriodIncome.hasActuals`: that source varies); rows with one show `.recent-item__diff` (`+$80.00`, red `−$20.00`, or `= est.`). A source that exists only in a past month's snapshot (deleted live) renders plain `Money` — there is no live income to store the actual on. A goal's checkbox is disabled only when it is unfunded **and** unticked, so a goal ticked before an actual cut its amount to $0 can still be unticked.
 
 Bill and goal rows wrap the checkbox and name in a `<label class="recent-item__toggle">`, so on mobile the whole left side of the 44px row is the tap target. The Goals tab's per-goal amount is `goalFundingTotal(goal, allocations, period.bills)` from `lib/goalFunding.ts` — what ticking applies in that period; the goal editor shows its per-paycheck average.
 
 ### Hints (`components/Hint.tsx`)
-`HINTS` holds one sentence per id (`overview-goals`, `income`, `expenses`, `budget`, `goals`, `settings`). Each page renders `<Hint id hints={state.meta.hints} onDismiss>` directly under `.page-head`; `dismissHint(state, id)` appends the id to `meta.hints`, which persists through `saveState`. Settings has no page state, so it loads/saves just for the hint. Settings' **Show hints again** clears `meta.hints`.
+`HINTS` holds one sentence per id (`overview-goals`, `overview-actuals`, `income`, `expenses`, `budget`, `goals`, `settings`). Each page renders `<Hint id hints={state.meta.hints} onDismiss>` directly under `.page-head`; `dismissHint(state, id)` appends the id to `meta.hints`, which persists through `saveState`. Settings has no page state, so it loads/saves just for the hint. Settings' **Show hints again** clears `meta.hints`.
 
 ### Demo mode
-`lib/sampleData.ts` → `sampleData(now?)` returns a full `BudgetState` (Day job, Rent, Utilities, Internet, Phone, Car insurance, Savings/Spending/Gas/Buffer, Emergency fund) with `meta.demo = true` and the paycheck anchored to today. While `meta.demo` is true, `DemoBanner` (rendered inside `SiteHeader`, re-checked on every route change) shows "You're looking at sample data." with **Clear and start fresh** → `eraseAllData()` (`lib/eraseAllData.ts`: `clearBudget()` + navigate to `/`). Settings' **Erase all data** uses the same function.
+`lib/sampleData.ts` → `sampleData(now?)` returns a full `BudgetState` (Day job, Rent, Utilities, Internet, Phone, Car insurance, Savings/Spending/Gas/Buffer, Emergency fund) with `meta.demo = true` and the paycheck anchored to today. While `meta.demo` is true, `DemoBanner` (rendered inside `SiteHeader`, re-checked on every route change) shows "You're looking at sample data." with **Clear and start fresh** → `eraseAllData()` (`lib/eraseAllData.ts`: `clearBudget()` + navigate to `${NEXT_PUBLIC_BASE_PATH}/`). Settings' **Erase all data** uses the same function. Never navigate to a bare `"/"`: on GitHub Pages the app lives under `/bursar`, and `/` is the root of the domain — a different site.
+
+**Export** (Settings): on touch screens (`pointer: coarse`) with `navigator.canShare({ files })`, the JSON goes through the share sheet (iOS "Save to Files" — a download link is unreliable in the installed iPhone app); closing the sheet (`AbortError`) reports nothing. Elsewhere it's an `<a download>` blob link, revoked after 60s rather than immediately (iOS cancels a download whose URL is revoked before it has read it).
 
 ### Core lib (`app/lib/`)
 | File | What it does |
 |---|---|
 | `budgetStorage.ts` | **Source of truth** for all types (`PayCycle`, `Income`, `RecurringExpense`, `LockedMonth`, `BudgetState`), localStorage read/write (`loadBudget`, `saveBudget`, `clearBudget`), and `normalizeParsed` which coerces any stored/imported JSON to a valid state |
-| `month.ts` | Period generation logic — `incomeDatesForMonth`, `paycheckPeriodsForMonth`, `monthlyIncomeOf`, and all date helpers |
+| `month.ts` | Period generation logic — `incomeDatesForMonth`, `paycheckPeriodsForMonth`, `monthlyIncomeOf`, `paycheckAmount` / `withoutActuals` (see *Variable income*), and all date helpers |
+| `paycheckActuals.ts` | `setPaycheckActual` (write / clear one paycheck's actual + recompute ticked goals in its period), `recentActualsAverage` (the Income page's suggestion) |
 | `monthView.ts` | Snapshots and the merge view: `snapshotForMonth`, `upsertSnapshot`, `backfillSnapshots`, `viewStateForMonth` (see *Facts vs definitions*) |
 | `allocations.ts` | `computeAllocations`, `isBudgetOverdrawn` |
 | `storage.ts` | Shim over `budgetStorage.ts`; pages import from here. `saveState` also upserts the **current month's** snapshot on every save |
 | `sampleData.ts` | `sampleData()` — the demo ledger, `meta.demo = true` |
-| `eraseAllData.ts` | `eraseAllData()` — clear every stored key and go to `/` |
+| `eraseAllData.ts` | `eraseAllData()` — clear every stored key and go to the Overview at the base path |
 | `paychecks.ts` | `upcomingPaychecks` — forecasts future paycheck dates |
 | `goalFunding.ts` | How goals are funded (see *Goal funding*): `sourceAmount`, `goalFundingTotal`, `fundingCandidates`, `fundingAmountLabel`, `goalFundingSources`, `paychecksToGo` |
 | `useIsMobile.ts` | `useIsMobile(maxWidth = 600)` — `useSyncExternalStore` over `matchMedia`: the first client render already has the real value (no desktop frame on a phone); the server snapshot is `false` |
@@ -90,7 +96,10 @@ Every "add a row" flow uses one shared form component rendered inside `FormDialo
 | `AddGoalForm` — three fields: name, type (`.segment--field` Savings / Debt), target; exports `goalDraftErrors`, `goalFromDraft` | goals page |
 | `AddSourceForm` | income page, Overview (first-run + quick add) |
 
-Other shared pieces: `ImportLedgerButton` (label + hidden file input; unwraps `{ data }` / `{ budgetAppV1 }` / bare state, runs `normalizeParsed`, saves, reloads — used by Settings and the Overview empty state), `OverflowMenu` (⋯ button with a `role=menu` list), `Hint`, `DemoBanner`, `FundingPicker`, `Form` / `advanceOnEnter` (see *Keyboard*).
+Other shared pieces: `ImportLedgerButton` (label + hidden file input; unwraps `{ data }` / `{ budgetAppV1 }` / bare state, runs `normalizeParsed`, saves, reloads — used by Settings and the Overview empty state), `OverflowMenu` (⋯ button with a `role=menu` list), `Hint`, `DemoBanner`, `FundingPicker`, `Form` / `advanceOnEnter` (see *Keyboard*), `InlineAmountInput` (see *Inline edits*).
+
+### Inline edits (`components/InlineAmountInput.tsx`)
+Every number edited in place uses `InlineAmountInput`: the Overview's paychecks, and in the tables the income amount, bill amount and due day (`integer`, `min 1`, `max 31`, `format={String}`), budget value (`25%` / `$100.00` by mode) and goal target. It reads as its formatted value until focused, then shows the raw number selected; **blur saves** (an untouched field saves nothing), Escape reverts, an emptied field commits `null` only when `clearable` (else reverts), and out-of-range input reverts. Saving on blur (not per keystroke) is what lets a decimal point be typed. Callers ignore `null` unless they're clearable. One look for every inline edit, in the `INLINE EDIT` block of `globals.css`: a dashed `--ink-a40` rule that darkens on hover and turns solid ink on focus — on `.input--inline` (added by the component) and on every `.ledger-table .input` / `.select` (names, selects and dates in table rows). Don't give a table input its own border rule.
 
 **Empty tables** are the one exception: a table with zero rows renders `.table-empty` ("No bills yet." + **Add your first bill**, which opens the same dialog) instead of the table; the goals page keeps `AddGoalForm` inline when there are no goals. After a successful add on the goals page the new goal's editor opens (`openEditor(id)`) so funding can be set immediately.
 
@@ -114,17 +123,27 @@ There is no custom on-screen-keyboard handling: `useSheetKeyboard` was removed w
 
 Weekly, biweekly and monthly all share the `lastPaycheckDate` field; `needsAnchor(cycle)` in `AddSourceForm.tsx` (true for everything except semimonthly) gates the date input and its validation for both the add form and the income table's edit row. `paychecksPerYear(cycle)` in `month.ts` is the single source for the per-year factor — `monthlyIncomeOf` and `sampleData` both use it. Unknown payCycle values from imported JSON fall back to biweekly via `coercePayCycle` in `normalizeParsed`.
 
+### Variable income
+An income's `amount` is always its **estimate** (the planning number). There is no "varies" flag — any income can take actuals, and one that has any is treated as varying (the `est.` badge, the average line). `Income` has one optional field:
+- `actuals?: { date, amount }[]` — a **fact**: what a paycheck really came to, keyed by the paycheck's local `YYYY-MM-DD`, **never by periodId** (ordinals shift when sources are added or removed). `normalizeIncomes` keeps only valid dates and finite amounts ≥ 0 (`$0` is a real paycheck — a week with no gigs), last entry per date wins, sorted by date; default `[]`.
+
+`paycheckAmount(income, date)` → `{ amount, estimated }` is the one place an actual replaces the estimate. `buildPeriod` and `periodSummariesForMonth` use it, and each period income item (`PeriodIncome`) carries `incomeId`, `dateISO`, `amount`, `estimate`, `estimated`, `hasActuals`. The cash-flow timeline goes through it too. Estimate-only on purpose: `monthlyIncomeOf` and `fundingCandidates` (which runs on `withoutActuals(state)` so one month of actuals doesn't skew per-paycheck figures).
+
+`setPaycheckActual(state, incomeId, date, amount | null, currentKey?)` writes or clears an actual and then rewrites `appliedPeriods[].amount` for every goal ticked in the period holding that paycheck, using `goalFundingTotal` over that period built from `viewStateForMonth` (so a past month recomputes against its snapshot's definitions). A tick that drops to $0 stays ticked at $0. Changing an income's estimate on the Income page does **not** recompute ticks (same as before). An actual whose date stops being a payday (anchor or cycle changed) stays stored but shows nowhere; it still counts toward the average.
+
+Teaching it: while the store has no income, `AddSourceForm` takes `firstIncome` and shows `FIRST_INCOME_TIP` under the amount ("Paycheck varies? Pick a low-typical amount…"); the Overview then shows the `overview-actuals` hint until the first actual is entered. In the income table, an income with 3+ actuals dated today or earlier shows `.income-average` — "Last N paychecks averaged $X" (N ≤ 6, `recentActualsAverage`) plus a **Use this** button that sets the estimate. Nothing changes the estimate automatically.
+
 ### Facts vs definitions, snapshots, and `viewStateForMonth` (critical)
 Two kinds of data live in `BudgetState`:
-- **Definitions** — incomes, bill amounts and due days, budget categories, goal targets and links. Shared across months; each past month keeps its own copy in `lockedMonths` (type `LockedMonth`, one per `monthKey`).
-- **Facts** — `paidPeriods` on an expense, `appliedPeriods` and `manualAdjustments` on a goal. Keyed by periodId, always live, always editable in every month. Nothing ever locks a fact; there is no read-only mode on the Overview.
+- **Definitions** — incomes (estimate, cycle, anchor), bill amounts and due days, budget categories, goal targets and links. Shared across months; each past month keeps its own copy in `lockedMonths` (type `LockedMonth`, one per `monthKey`).
+- **Facts** — `paidPeriods` on an expense, `appliedPeriods` and `manualAdjustments` on a goal (keyed by periodId), and `actuals` on an income (keyed by paycheck date). Always live, always editable in every month. Nothing ever locks a fact; there is no read-only mode on the Overview.
 
-When snapshots are written (all in `lib/monthView.ts`, all definitions-only: `paidPeriods`, `appliedPeriods`, `manualAdjustments` are written as `[]`):
+When snapshots are written (all in `lib/monthView.ts`, all definitions-only: `paidPeriods`, `appliedPeriods`, `manualAdjustments`, `actuals` are written as `[]`):
 - **Every save** — `saveState` in `storage.ts` upserts the *current* month's snapshot from live definitions, so when the month rolls over its snapshot already holds the definitions as they last stood during that month.
 - **Overview load** — `backfillSnapshots` snapshots every past month since `meta.createdAt` that lacks one (capped at 120 months).
 - **Refresh from current data** — the ⋯ item on a past month opens a `ConfirmDialog` ("Refresh <Month> from current data?", confirm *Refresh*, cancel *Keep snapshot*) and re-snapshots that month via `upsertSnapshot`. Facts are untouched.
 
-`viewStateForMonth(state, monthKey, currentKey?)` is what the Overview renders: for a past month with a snapshot it takes definitions from the snapshot but reads facts from live state matched by id (empty arrays if the id no longer exists live); current and future months, and past months without a snapshot, return live state unchanged. `normalizeLockedMonths` accepts legacy snapshots that still contain facts (written by the old manual Lock/Archive flow) and empties them. Do not rename `LockedMonth` or `lockedMonths`; old exports import unchanged.
+`viewStateForMonth(state, monthKey, currentKey?)` is what the Overview renders: for a past month with a snapshot it takes definitions from the snapshot but reads facts from live state matched by id (empty arrays if the id no longer exists live) — so a past paycheck shows the snapshot's estimate unless a live actual exists for its date; current and future months, and past months without a snapshot, return live state unchanged. `normalizeLockedMonths` accepts snapshots that still contain facts (legacy ones were written by the old manual Lock/Archive flow) and empties them. Do not rename `LockedMonth` or `lockedMonths`; old exports import unchanged.
 
 ### Period logic (critical)
 `paycheckPeriodsForMonth(state, monthKey)` in `month.ts`:
@@ -141,6 +160,8 @@ Type scale tokens: `--text-1` 13px, `--text-2` 15px, `--text-3` 17px (body), `--
 
 ### Data format (localStorage key: `budgetApp:v1`)
 Export wraps the state in `{ app: "Bursar", format: "bursar:v1", exportedAt, data: BudgetState }`. Import (`ImportLedgerButton`) unwraps `data` (or `budgetAppV1` for legacy), runs `normalizeParsed`, then `saveState`; it does not check the `format` string, so older `paperInkLedger:v1` exports still import.
+
+Income fields beyond the basics: `actuals` (default `[]`) — see *Variable income*. Older data without it loads unchanged; no version bump.
 
 `meta` fields: `onboardingComplete` (legacy, unused for routing), `version`, `createdAt`, `hints: string[]` (dismissed hint ids, default `[]`), `demo?: boolean` (sample data loaded, default `false`).
 
@@ -159,6 +180,11 @@ tests/
                              # saveState upserting the current month (window/localStorage stubbed), legacy snapshots
   sample-data.test.ts        # meta.hints / meta.demo defaults, sampleData() round-trips through normalizeParsed
   build-sw.test.ts           # precacheFiles, buildVersion, renderServiceWorker (scripts/build-sw.ts)
+  erase-all-data.test.ts     # eraseAllData navigates to the base path, never the domain root
+  variable-income.test.ts    # paycheckAmount, periods/leftover/allocations with actuals, actuals surviving an
+                             # ordinal shift, snapshot round trip, setPaycheckActual (ticked-goal recompute, past
+                             # month vs snapshot), fundingCandidates ignoring actuals, recentActualsAverage,
+                             # normalizeParsed (old fixture unchanged, malformed actuals dropped), scenario F
   helpers.ts                 # semiIncome(), biwIncome(), monthlyExpense(), annualExpense(), etc.
   fixtures/                  # scenario JSON files (A–I) for import testing
 ```
@@ -173,7 +199,7 @@ Scenarios in `paycheck-periods.test.ts` all test against May 2026 (31-day month)
 - **G** — single monthly income (May 15 anchor → 1 period, overhang through Jun 14, pre-payday bills roll to April)
 - **H** — monthly (May 1) + bi-weekly (May 2) (day-1/day-2 merge → 3 periods, no overhang)
 
-Note: `tests/fixtures/scenario-{e,f,g}*.json` already exist for unrelated full-state import scenarios; paycheck-pattern fixtures use H (weekly), I (weekly + bi-weekly), J (monthly) — new ones should continue from K to avoid collision. When adding a new pay cycle or period behaviour, add an inline scenario in the test file (preferred) and optionally a matching fixture.
+Note: `tests/fixtures/scenario-{e,f,g}*.json` already exist for unrelated full-state import scenarios (F's Freelance A has four actuals, Apr 18 – May 30); paycheck-pattern fixtures use H (weekly), I (weekly + bi-weekly), J (monthly) — new ones should continue from K to avoid collision. When adding a new pay cycle or period behaviour, add an inline scenario in the test file (preferred) and optionally a matching fixture.
 
 ## CSS conventions (`app/globals.css`)
 
@@ -236,6 +262,9 @@ Never write a raw `rgba()`/hex in a component rule; add a token if one is missin
 | `.more-sheet__list` / `__link(--active)` | Income / Settings links behind the bottom nav's More |
 | `.segment--field` | A `.segment` used as a form field (goal type), fills the field width |
 | `.recent-item__toggle` | The `<label>` around a period row's checkbox + name |
+| `.input--inline` | The shared inline-edit look (dashed rule → solid on focus), added by `InlineAmountInput`; `.ledger-table .input` / `.select` share the same rules |
+| `.input.recent-item__amount`, `.recent-item__diff(--neg)` | Income tab: sizing for a paycheck's `InlineAmountInput`; an actual's difference from its estimate |
+| `.income-average` (`__amount`) | Income table: "Last N paychecks averaged $X" + **Use this** |
 | `.field__row`, `.input--day` | Side-by-side controls in one field; the 52px due-day input |
 | `.page-head` | Page header block with `__title`, `__lead`, `__meta` |
 | `.hint-line` | One-sentence dismissible hint (`__text`, `__dismiss`) under `.page-head` or a period card's tab row |

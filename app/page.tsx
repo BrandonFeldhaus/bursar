@@ -5,6 +5,7 @@ import Link from "next/link";
 import { IconChevronDown, IconPlus } from "@tabler/icons-react";
 import {
   loadState,
+  newId,
   saveState,
   type BudgetCategory,
   type BudgetState,
@@ -18,11 +19,15 @@ import {
   formatShortDate,
   incomeDatesForMonth,
   monthBounds,
+  paycheckAmount,
   paycheckPeriodsForMonth,
   type PaycheckPeriod,
+  type PeriodIncome,
   recurringDueDate,
   shiftMonth,
+  toISODate,
 } from "./lib/month";
+import { setPaycheckActual } from "./lib/paycheckActuals";
 import { backfillSnapshots, upsertSnapshot, viewStateForMonth } from "./lib/monthView";
 import { sampleData } from "./lib/sampleData";
 import { useHydrated } from "./lib/useHydrated";
@@ -35,6 +40,9 @@ import { FormDialog } from "./components/FormDialog";
 import { OverflowMenu } from "./components/OverflowMenu";
 import { ImportLedgerButton } from "./components/ImportLedgerButton";
 import { Hint, dismissHint, type HintId } from "./components/Hint";
+import { UndoToast, type UndoEntry } from "./components/UndoToast";
+import { advanceOnEnter } from "./components/Form";
+import { InlineAmountInput } from "./components/InlineAmountInput";
 import {
   AddSourceForm,
   emptySourceDraft,
@@ -115,6 +123,20 @@ function Timeline({
   );
 }
 
+/** "+$80.00" / "−$20.00": an actual against its estimate. */
+function PaycheckDiff({ item }: { item: PeriodIncome }) {
+  const diff = Math.round((item.amount - item.estimate) * 100) / 100;
+  if (diff === 0) return <span className="recent-item__diff">= est.</span>;
+  return (
+    <span
+      className={`recent-item__diff${diff < 0 ? " recent-item__diff--neg" : ""}`}
+      title={`Estimate ${moneyFmt(item.estimate)}`}
+    >
+      {diff > 0 ? "+" : ""}{moneyFmt(diff)}
+    </span>
+  );
+}
+
 type TabKey = "income" | "bills" | "leftover" | "goals";
 
 function PeriodCard({
@@ -126,6 +148,8 @@ function PeriodCard({
   isCurrent,
   onTogglePaid,
   onToggleGoalPeriod,
+  onSetActual,
+  canEditIncome,
   body,
   billsEmptyState,
   incomeAddon,
@@ -142,6 +166,10 @@ function PeriodCard({
   isCurrent: boolean;
   onTogglePaid: (expenseId: string, periodId: string) => void;
   onToggleGoalPeriod: (goalId: string, periodId: string, amount: number) => void;
+  /** Write (number) or clear (null) the actual for one paycheck. */
+  onSetActual: (item: PeriodIncome, amount: number | null) => void;
+  /** False for a source that exists only in a past month's snapshot: nothing live to store an actual on. */
+  canEditIncome: (incomeId: string) => boolean;
   /** Replaces the whole card body (first-run empty state). */
   body?: ReactNode;
   /** Rendered in the Bills tab when the store has no bills at all. */
@@ -303,11 +331,28 @@ function PeriodCard({
                   <p className="muted muted--italic">No income in this period.</p>
                 ) : (
                   period.incomes.map((inc) => (
-                    <div key={inc.id} className="recent-item">
-                      <span className="recent-item__name">{inc.name}</span>
+                    <div key={inc.id} className="recent-item recent-item--income" onKeyDown={advanceOnEnter}>
+                      <span className="recent-item__group">
+                        <span className="recent-item__name">{inc.name}</span>
+                        {inc.hasActuals && inc.estimated && (
+                          <span className="badge badge--xs" title="Estimate — enter the real amount when it's paid">est.</span>
+                        )}
+                      </span>
                       <span className="recent-item__group recent-item__group--wide">
                         <span className="recent-item__date">{formatShortDate(inc.date)}</span>
-                        <Money value={inc.amount} />
+                        {!inc.estimated && <PaycheckDiff item={inc} />}
+                        {canEditIncome(inc.incomeId) ? (
+                          <InlineAmountInput
+                            className="recent-item__amount"
+                            value={inc.amount}
+                            clearable
+                            enterKeyHint="done"
+                            aria-label={`${inc.name}, ${formatShortDate(inc.date)}${inc.estimated ? " (estimate)" : ""}. Enter the actual amount; clear it to use the estimate.`}
+                            onCommit={(n) => onSetActual(inc, n)}
+                          />
+                        ) : (
+                          <Money value={inc.amount} />
+                        )}
                       </span>
                     </div>
                   ))
@@ -390,8 +435,9 @@ function PeriodCard({
                           type="checkbox"
                           checked={isApplied}
                           onChange={() => onToggleGoalPeriod(goal.id, periodId, linkedAmount)}
-                          className={`recent-item__check${linkedAmount <= 0 ? " recent-item__check--nolink" : ""}`}
-                          disabled={linkedAmount <= 0}
+                          className={`recent-item__check${linkedAmount <= 0 && !isApplied ? " recent-item__check--nolink" : ""}`}
+                          // A ticked goal stays untickable even if an actual has since cut its amount to $0.
+                          disabled={linkedAmount <= 0 && !isApplied}
                           title={linkedAmount > 0
                             ? (isApplied ? "Remove contribution" : "Apply contribution")
                             : "Not funded yet — add funding sources on the Goals page"
@@ -454,6 +500,7 @@ export default function Home() {
   const [billDraft, setBillDraft] = useState<BillFormDraft>(emptyBillDraft);
   const [billAttempted, setBillAttempted] = useState(false);
   const [importStatus, setImportStatus] = useState("");
+  const [undo, setUndo] = useState<UndoEntry | null>(null);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -518,7 +565,8 @@ export default function Home() {
     const evts: { kind: string; day: number; label: string; tooltip: string }[] = [];
     viewState.incomes.forEach((inc) => {
       incomeDatesForMonth(inc, month).forEach((d) => {
-        evts.push({ kind: "income", day: d.getDate(), label: moneyFmt(inc.amount), tooltip: inc.name });
+        const { amount } = paycheckAmount(inc, toISODate(d));
+        evts.push({ kind: "income", day: d.getDate(), label: moneyFmt(amount), tooltip: inc.name });
       });
     });
     const billPaid = new Map<string, boolean>();
@@ -577,6 +625,21 @@ export default function Home() {
           };
         }),
       };
+    });
+  }
+
+  // Write or clear one paycheck's actual; goals ticked in its period follow (lib/paycheckActuals.ts).
+  function setActual(item: PeriodIncome, amount: number | null) {
+    if (!state) return;
+    const previous =
+      state.incomes.find((i) => i.id === item.incomeId)?.actuals?.find((a) => a.date === item.dateISO)?.amount ?? null;
+    if (previous === amount) return;
+    setState((s) => (s ? setPaycheckActual(s, item.incomeId, item.dateISO, amount, cmk) : s));
+    const when = `${item.name} · ${formatShortDate(item.date)}`;
+    setUndo({
+      id: newId(),
+      message: amount === null ? `${when} back to estimate` : `${when} set to ${moneyFmt(amount)}`,
+      onUndo: () => setState((s) => (s ? setPaycheckActual(s, item.incomeId, item.dateISO, previous, cmk) : s)),
     });
   }
 
@@ -651,6 +714,16 @@ export default function Home() {
   const hasIncome = state.incomes.length > 0;
   const hasBills = state.recurringExpenses.length > 0;
   const showGoalsHint = hasBills && state.goals.length === 0;
+  // Teaches in-place paycheck editing until the first actual is entered (or the hint is dismissed).
+  const showActualsHint = hasIncome && !state.incomes.some((i) => (i.actuals ?? []).length > 0);
+  const firstCardHint = (showActualsHint || showGoalsHint) ? (
+    <>
+      {showActualsHint && <Hint id="overview-actuals" hints={state.meta.hints} onDismiss={dismiss} />}
+      {showGoalsHint && <Hint id="overview-goals" hints={state.meta.hints} onDismiss={dismiss} />}
+    </>
+  ) : undefined;
+  const liveIncomeIds = new Set(state.incomes.map((i) => i.id));
+  const canEditIncome = (incomeId: string) => liveIncomeIds.has(incomeId);
   const monthLabel = formatMonthLabel(month);
 
   const firstRunBody = (
@@ -753,11 +826,13 @@ export default function Home() {
             isCurrent={isCurrent}
             onTogglePaid={togglePaid}
             onToggleGoalPeriod={toggleGoalPeriod}
+            onSetActual={setActual}
+            canEditIncome={canEditIncome}
             body={!hasIncome && i === 0 ? firstRunBody : undefined}
             billsEmptyState={hasIncome && !hasBills ? billsEmptyBody : undefined}
             incomeAddon={hasIncome ? quickAdd("source") : undefined}
             billsAddon={hasBills ? quickAdd("bill") : undefined}
-            hint={i === 0 && showGoalsHint ? <Hint id="overview-goals" hints={state.meta.hints} onDismiss={dismiss} /> : undefined}
+            hint={i === 0 ? firstCardHint : undefined}
           />
         ))}
       </div>
@@ -805,6 +880,7 @@ export default function Home() {
       <FormDialog open={dialog === "source"} title="Add income" onClose={() => setDialog(null)}>
         <AddSourceForm
           inSheet
+          firstIncome={!hasIncome}
           draft={sourceDraft}
           setDraft={setSourceDraft}
           onAdd={() => { if (addIncome()) setDialog(null); }}
@@ -821,6 +897,7 @@ export default function Home() {
           attempted={billAttempted}
         />
       </FormDialog>
+      <UndoToast entry={undo} onDismiss={() => setUndo(null)} />
     </section>
   );
 }

@@ -26,6 +26,9 @@ export function emptySourceDraft(): SourceDraft {
   return { name: "", amount: "", payCycle: "biweekly", lastPaycheckDate: todayISO() };
 }
 
+/** Shown under the amount while the first income is being added. */
+export const FIRST_INCOME_TIP = "Paycheck varies? Pick a low-typical amount. You can enter the real amount each payday on the Overview.";
+
 export function sourceDraftErrors(draft: SourceDraft) {
   const parsedAmount = Number(draft.amount.replace(/[^0-9.]/g, ""));
   return {
@@ -45,6 +48,7 @@ export function incomeFromDraft(draft: SourceDraft, errs: ReturnType<typeof sour
     cadence: "monthly",
     payCycle: draft.payCycle,
     lastPaycheckDate: needsAnchor(draft.payCycle) ? draft.lastPaycheckDate || todayISO() : "",
+    actuals: [],
   };
 }
 
@@ -55,6 +59,7 @@ export function AddSourceForm({
   onAdd,
   attempted,
   inSheet,
+  firstIncome,
 }: {
   draft: SourceDraft;
   setDraft: Dispatch<SetStateAction<SourceDraft>>;
@@ -62,6 +67,8 @@ export function AddSourceForm({
   attempted?: boolean;
   /** Renders inside FormDialog / BottomSheet — drops the sunk background/padding. */
   inSheet?: boolean;
+  /** The store has no income yet: show the variable-paycheck tip under the amount. */
+  firstIncome?: boolean;
 }) {
   const errs = sourceDraftErrors(draft);
   const cls = [
@@ -99,13 +106,20 @@ export function AddSourceForm({
           placeholder="0"
           value={draft.amount}
           aria-invalid={attempted && !!errs.amount}
-          aria-describedby={attempted && errs.amount ? "inc-draft-amount-err" : undefined}
+          aria-describedby={
+            [attempted && errs.amount ? "inc-draft-amount-err" : "", firstIncome ? "inc-draft-amount-tip" : ""]
+              .filter(Boolean)
+              .join(" ") || undefined
+          }
           onChange={(e) =>
             setDraft((d) => ({ ...d, amount: e.target.value.replace(/[^0-9.]/g, "") }))
           }
         />
         {attempted && errs.amount && (
           <span id="inc-draft-amount-err" className="field__error">{errs.amount}</span>
+        )}
+        {firstIncome && (
+          <p id="inc-draft-amount-tip" className="field__hint">{FIRST_INCOME_TIP}</p>
         )}
       </div>
       <div className="field">

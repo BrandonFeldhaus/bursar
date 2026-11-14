@@ -31,7 +31,13 @@
         "amount": 900,
         "cadence": "monthly",
         "payCycle": "biweekly",
-        "lastPaycheckDate": "2026-05-02"
+        "lastPaycheckDate": "2026-05-02",
+        "actuals": [
+          { "date": "2026-04-18", "amount": 820 },
+          { "date": "2026-05-02", "amount": 1040 },
+          { "date": "2026-05-16", "amount": 760 },
+          { "date": "2026-05-30", "amount": 1125 }
+        ]
       },
       {
         "id": "income-f3",
