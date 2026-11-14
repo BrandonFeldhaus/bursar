@@ -28,10 +28,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The pnpm version comes from "packageManager" in package.json. Don't also set `version:`
+      # here: action-setup fails with "Multiple versions of pnpm specified" when both exist.
       - uses: pnpm/action-setup@v4
         name: Install pnpm
         with:
-          version: 10
           run_install: false
 
       - name: Install Node.js

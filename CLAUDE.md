@@ -307,6 +307,7 @@ Never write a raw `rgba()`/hex in a component rule; add a token if one is missin
 - **Modals stack** — a `BottomSheet` rendered inside another one is a nested Base UI drawer: Escape closes only the top one, the parent gets `data-nested-drawer-open`, and only the outer backdrop renders. That is how the funding picker's sheet opens over the goal editor's sheet.
 - **Keep modals mounted** — pass `open={x}`; unmounting on close skips the exit transition. When the content depends on something that goes `null` on close, keep the last value around (the goals page's `sheetGoalId`).
 - **No inline styles** — see CSS conventions. `grep -rn 'style=' app` should only return `--pct`, `--pos`, `--swatch` custom properties.
+- **pnpm version on CI** comes only from `packageManager` in `package.json`. `.github/workflows/deploy.yml`'s `pnpm/action-setup` step must not also set `version:`, or the deploy fails at setup with "Multiple versions of pnpm specified".
 - **`out/` directory** is the static export committed to the repo. Run `npm run build` to regenerate it before committing changes.
 - **No `font-family` outside the typography block** — components pick a role by being listed in the display or numerals group there; body is inherited. Sizes come from `--text-*` tokens; the only `px` font sizes left are inside `clamp()`s.
 - **Snapshots are automatic** — never add a Lock / Unlock / Archive control. Paid marks and goal contributions are facts and stay editable in every month; if a past month looks wrong, *Refresh from current data* rewrites its definitions only.
